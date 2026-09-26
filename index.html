@@ -213,12 +213,9 @@ body.dirty .toast{bottom:calc(96px + env(safe-area-inset-bottom,0px))}
 .coin.paused .rail .gap{opacity:.25}
 .coin.paused .rail .now{border-color:var(--faint)}
 .chip.paused{border-color:var(--faint);color:var(--muted)}
-.switch{display:inline-flex;align-items:center;gap:8px;cursor:pointer}
-.switch input{appearance:none;-webkit-appearance:none;width:38px;height:22px;border-radius:22px;background:var(--rail);position:relative;cursor:pointer;transition:background .15s;margin:0}
-.switch input::after{content:"";position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:var(--surface);transition:left .15s}
-.switch input:checked{background:var(--btc)}
-.switch input:checked::after{left:19px}
-.switch input:disabled{opacity:.45;cursor:not-allowed}
+.modes{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;margin-top:14px}
+.modes .mlabel{font-size:.88rem;color:var(--muted)}
+.mhelp{font-size:.82rem;color:var(--muted);margin:6px 0 0}
 .settings p{margin:0 0 8px}
 </style>
 </head>
@@ -248,7 +245,7 @@ body.dirty .toast{bottom:calc(96px + env(safe-area-inset-bottom,0px))}
     </header>
 
     <section class="totals" aria-live="polite">
-      <div><p class="k">Your alts in the plan, now</p><p class="v" id="tNow"></p><p class="s" id="tNowUsd"></p></div>
+      <div><p class="k">Coins you’re selling, now</p><p class="v" id="tNow"></p><p class="s" id="tNowUsd"></p></div>
       <div><p class="k">If the remaining rungs fill</p><p class="v btc" id="tAll"></p><p class="s" id="tAllX"></p></div>
     </section>
     <p class="fine" id="tFine"></p>
@@ -290,7 +287,7 @@ body.dirty .toast{bottom:calc(96px + env(safe-area-inset-bottom,0px))}
     </details>
 
     <h2>Alert list</h2>
-    <p class="h2note">Remaining rung targets for coins in the plan, in sats and in dollars at today’s BTC price.</p>
+    <p class="h2note">Remaining rung targets for the coins you’re selling, in sats and in dollars at today’s BTC price.</p>
     <div class="alerts">
       <pre id="alertText"></pre>
       <div style="margin-top:10px;display:flex;gap:10px;align-items:center">
@@ -393,6 +390,7 @@ async function connect(){
   F.targets.obj.coins = F.targets.obj.coins || {};
   F.state = s.obj ? s : {obj:{rungs:{}}, sha:null};
   if(!F.portfolio.obj.ladder) F.portfolio.obj.ladder = clone(DEFAULT_LADDER);
+  for(const [sym,tc] of Object.entries(F.targets.obj.coins)){ const pc = F.portfolio.obj.coins[sym]; if(tc.paused && pc && !pc.paused) pc.paused = true; }
 }
 async function loadRun(){
   try{ const d = await gh(`${repoPath()}/actions/workflows/${WORKFLOW}/runs?per_page=1`); lastRun = (d.workflow_runs&&d.workflow_runs[0]) || {none:true}; }
@@ -440,25 +438,36 @@ function ladderLabel(l){ return (l.scale==='lin'?'linear':'geometric')+': '+l.ru
 function computeTargets(p){
   const saved = F.targets.obj.coins, savedPf = F.portfolio.obj, M = F.market.obj.coins;
   const ladderSame = JSON.stringify(p.ladder)===JSON.stringify(savedPf.ladder);
-  const coins = {}, changed = [];
+  const coins = {}, changed = [], resized = [], modeChanged = [];
   for(const sym of Object.keys(M)){
     const c = p.coins[sym]; if(!c || !c.include) continue;
-    const ex = saved[sym], sc = savedPf.coins[sym];
-    const qtySame = sc && sc.include && sc.qty===c.qty;
-    if(ex && (ex.rungs.some(r=>r.done) || (ladderSame && qtySame))){ coins[sym]=ex; continue; }
+    const ex = saved[sym], sc = savedPf.coins[sym] || {};
+    if(ex && (ladderSame || ex.rungs.some(r=>r.done))){
+      // keep the saved rung prices; if the holding changed, scale the open rungs' amounts with it
+      const out = clone(ex);
+      if(sc.qty !== c.qty){
+        const k = sc.qty > 0 ? c.qty/sc.qty : null;
+        out.rungs.forEach(r=>{ if(r.done) return; const lr = p.ladder.rungs[r.n-1]; r.sell_qty = +(k!==null ? r.sell_qty*k : c.qty*((lr&&+lr.s)||0)/100).toPrecision(6); });
+        out.qty = c.qty; resized.push(sym);
+      }
+      if(c.paused) out.paused = true; else delete out.paused;
+      if(!!ex.paused !== !!c.paused) modeChanged.push(sym);
+      coins[sym] = out; continue;
+    }
     const pr = priceOf(sym), m = M[sym];
     if(!pr.ratio || pr.ratio>=m.peak) continue;
     const rungs = [];
     p.ladder.rungs.forEach((r,i)=>{ const s=Math.max(0,+r.s||0), f=Math.max(0,Math.min(100,+r.f||0))/100; if(s<=0) return;
       rungs.push({n:i+1, sats:+(targetOf(pr.ratio,m.peak,f,p.ladder.scale)*1e8).toPrecision(5), sell_qty:+(c.qty*s/100).toPrecision(6)}); });
     coins[sym] = {name:m.name, qty:c.qty, peak_sats:+(m.peak*1e8).toPrecision(5), rungs};
-    if(ex && ex.paused) coins[sym].paused = true;
+    if(c.paused) coins[sym].paused = true;
     changed.push(sym);
   }
   const removed = Object.keys(saved).filter(s=>!coins[s]);
-  return {coins, changed, removed};
+  return {coins, changed, resized, modeChanged, removed};
 }
-function plan(){ if(!planCache) planCache = draft ? computeTargets(draft) : {coins:F.targets.obj.coins, changed:[], removed:[]}; return planCache; }
+function plan(){ if(!planCache) planCache = draft ? computeTargets(draft) : {coins:F.targets.obj.coins, changed:[], resized:[], modeChanged:[], removed:[]}; return planCache; }
+const modeOf = c => !c || !c.include ? 'off' : (c.paused ? 'paused' : 'selling');
 function rungStatus(sym, r, ratio){
   if(r.done) return 'sold';
   const t = r.sats/1e8;
@@ -475,11 +484,11 @@ function coinModel(sym){
   const rungs = (t ? t.rungs : []).map(r=>{ const target=r.sats/1e8; return Object.assign({}, r, {target, usd:target*btc, move:target/ratio-1, get:r.sell_qty*target, status:rungStatus(sym,r,ratio)}); });
   const open = rungs.filter(r=>!r.done);
   const next = open.filter(r=>r.status!=='reached')[0] || null;
-  const paused = !!(t && t.paused);
+  const mode = modeOf(c), paused = mode==='paused';
   const ch = {c30: liveChange(sym, ratio, 30, m.c30), c90: liveChange(sym, ratio, 90, m.c90), c365: liveChange(sym, ratio, 365, m.c365)};
   const low = m.low ? Math.min(m.low, ratio) : null;
-  return {sym, m, c, pr, ratio, include:!!c.include, paused, ch, low, above:ratio>=m.peak, rungs, open, next,
-    nowBTC:c.qty*ratio, nowUSD:c.qty*pr.usd, room:m.peak/ratio, planned:!!t, changed:P.changed.includes(sym),
+  return {sym, m, c, pr, ratio, include:!!c.include, mode, paused, ch, low, above:ratio>=m.peak, rungs, open, next,
+    nowBTC:c.qty*ratio, nowUSD:c.qty*pr.usd, room:m.peak/ratio, planned:!!t, changed:P.changed.includes(sym), resized:P.resized.includes(sym),
     remainGet:open.reduce((a,r)=>a+r.get,0), remainNow:open.reduce((a,r)=>a+r.sell_qty*ratio,0)};
 }
 function liveChange(sym, ratio, days, fallback){
@@ -530,7 +539,7 @@ function detailHTML(M){
   h += '</div>';
   h += `<div class="chart">${sparkSVG(M)}<p class="chartkey">Shaded: Nov 2024 – Nov 2025. Solid orange: the high. Dashed: rungs (grey once sold).</p></div>`;
   if(!M.include){
-    h += `<p class="note">${sym} isn’t in the plan. Tick “In the plan” below and save to give it rungs.</p>`;
+    h += `<p class="note">${sym} isn’t tracked. Choose Selling or Paused below and save to give it rungs from today’s price.</p>`;
   } else if(!M.rungs.length){
     h += M.above ? `<p class="note">${sym} is ${Math.round((M.ratio/c.peak-1)*100)}% above its 2024–25 high in BTC terms, so there are no rungs below that level.</p>`
                  : `<p class="note">No rungs saved for ${sym} yet. Save to create them.</p>`;
@@ -539,28 +548,30 @@ function detailHTML(M){
     h += '<div class="scroll"><table class="rungs"><thead><tr><th>Rung</th><th>Target (sats)</th><th>vs BTC</th><th>Sell</th><th>You get</th><th></th></tr></thead><tbody>';
     M.rungs.forEach(r=>{
       const chip = CHIP[r.status] ? `<br><span class="chip ${CHIP[r.status][0]}">${CHIP[r.status][1]}</span>` : '';
-      const act = M.changed ? '' : r.done
+      const act = (M.changed||M.resized) ? '' : r.done
         ? `<button type="button" class="act" data-unsold="${sym}:${r.n}" ${locked?'disabled':''}>Undo</button>`
         : `<button type="button" class="act" data-sold="${sym}:${r.n}" ${locked?'disabled':''}>Sold</button>`;
       h += `<tr class="${r.done?'done':''}"><td>${r.n}${chip}</td><td>${fmtSats(r.target)}<small>≈ ${fmtPx(r.usd)}</small></td><td>${r.done?'':fmtPct(r.move,0)}</td><td>${fmtQty(r.sell_qty)}</td><td class="get">${fmtBTC(r.get)}</td><td>${act}</td></tr>`;
     });
     h += `</tbody><tfoot><tr><td colspan="4">Remaining</td><td class="get">${fmtBTC(M.remainGet)}</td><td></td></tr></tfoot></table></div>`;
     if(M.changed) h += `<p class="note">Preview from live prices. Save to fix these rungs.</p>`;
+    else if(M.resized) h += `<p class="note">Same rung prices, new amounts for the new holding. Save to apply.</p>`;
     else if(locked) h += `<p class="note">Save or discard your changes before marking rungs as sold.</p>`;
     else h += `<p class="note">“Sold” (tap twice) records the rung as done in your repository and lowers the holding by the rung’s amount, so it never alerts again.</p>`;
     if(M.open.length>1 && M.remainNow*btcUsd()/M.open.length < 10) h += `<p class="note err">Each rung here is under $10, below many exchanges’ minimum order.</p>`;
   }
-  if(M.paused) h += `<p class="note">Alerts are paused for ${sym}. Its rungs are kept but it isn’t checked, and it’s left out of the totals and the alert list.</p>`;
+  if(M.paused) h += `<p class="note">Paused: ${sym}’s rungs are kept but the hourly check skips it, and it’s left out of the totals and the alert list.</p>`;
   if(c.partial) h += `<p class="note err">Price history for ${sym} only starts ${fmtDate(c.first)}, so the real 2024–25 high may have been higher.</p>`;
-  h += `<div class="dctl"><label><input type="checkbox" data-inc="${sym}" ${M.include?'checked':''}> In the plan</label>`;
-  if(M.planned && !M.changed) h += `<label class="switch"><input type="checkbox" role="switch" data-pause="${sym}" ${M.paused?'':'checked'} ${draft||busy?'disabled':''}> Alerts</label>`;
-  h += `<label>Holding <input class="qtyin" type="number" step="any" min="0" inputmode="decimal" data-qty="${sym}" value="${M.c.qty}"></label></div>`;
+  h += `<div class="modes"><span class="mlabel">This coin</span><div class="seg" role="group" aria-label="What to do with ${sym}">`;
+  [['selling','Selling'],['paused','Paused'],['off','Not tracked']].forEach(([k,l])=>{ h += `<button type="button" data-mode="${sym}:${k}" aria-pressed="${M.mode===k}">${l}</button>`; });
+  h += `</div></div><p class="mhelp">${{selling:'Rungs on, alerts on.', paused:'Rungs kept, no alerts.', off:'No rungs. Choosing Selling or Paused later creates them from that day’s price.'}[M.mode]}</p>`;
+  h += `<div class="dctl"><label>Holding <input class="qtyin" type="number" step="any" min="0" inputmode="decimal" data-qty="${sym}" value="${M.c.qty}"></label><span class="fine" style="margin:0">Changing it keeps the rung prices and adjusts the amounts.</span></div>`;
   return h;
 }
 function coinHTML(M){
   const sym = esc(M.sym), open = !!openPanels[M.sym];
   let info;
-  if(!M.include) info = `<span>${M.above?'<b>above</b> its high':'<b>'+fmtX(M.room)+'</b> to high'}</span><span class="chip">not in plan</span>`;
+  if(!M.include) info = `<span>${M.above?'<b>above</b> its high':'<b>'+fmtX(M.room)+'</b> to high'}</span><span class="chip">not tracked</span>`;
   else if(M.above && !M.rungs.length) info = '<span><b>above</b> its high</span>';
   else if(M.next) info = `<span><b>${fmtPct(M.next.move,0)}</b> to rung ${M.next.n}</span><span>${fmtX(M.room)} to high</span>`;
   else if(M.rungs.length && M.open.length===0) info = '<span><b>all rungs sold</b></span>';
@@ -570,6 +581,7 @@ function coinHTML(M){
   let chips = ''; ['reached','close','hitbefore','sold'].forEach(k=>{ if(counts[k]) chips += `<span class="chip ${CHIP[k][0]}">${counts[k]>1?counts[k]+' ':''}${CHIP[k][1]}</span>`; });
   if(M.paused) chips = '<span class="chip paused">alerts paused</span>';
   if(M.changed) chips += '<span class="chip preview">new rungs</span>';
+  else if(M.resized) chips += '<span class="chip preview">new amounts</span>';
   if(M.m.partial) chips += '<span class="chip">short history</span>';
   return `<article class="coin${M.include?'':' off'}${M.paused?' paused':''}" data-sym="${sym}">
   <button type="button" class="head" aria-expanded="${open}" aria-controls="d-${sym}" data-toggle="${sym}">
@@ -620,14 +632,14 @@ function renderDynamic(){
   const nextKey = M => M.paused ? 1.5e6 : M.next ? M.next.move : (M.include ? 1e6 : 2e6);
   const sorter = {value:(a,b)=>b.nowUSD-a.nowUSD, next:(a,b)=>nextKey(a)-nextKey(b), m30:(a,b)=>(b.ch.c30??-9)-(a.ch.c30??-9)}[ui.sort] || ((a,b)=>b.nowUSD-a.nowUSD);
   models.sort(sorter);
-  const big = models.filter(M=>M.nowUSD>=ui.dust || M.changed), small = models.filter(M=>!(M.nowUSD>=ui.dust || M.changed));
+  const big = models.filter(M=>M.nowUSD>=ui.dust || M.changed || M.resized), small = models.filter(M=>!(M.nowUSD>=ui.dust || M.changed || M.resized));
   document.getElementById('axis').innerHTML = [25,10,5,2,1].map(k=>`<span style="left:${pos(1/k,1)*100}%">${k===1?'high':k+'×'}</span>`).join('');
   document.getElementById('list').innerHTML = big.map(coinHTML).join('');
   document.getElementById('small').innerHTML = small.map(coinHTML).join('');
   document.getElementById('smallSum').textContent = `${small.length} coins, ${fmtUSD(small.reduce((a,M)=>a+M.nowUSD,0))}`;
 
-  const inc = models.filter(M=>M.include && !M.paused);
-  const pausedList = models.filter(M=>M.include && M.paused).map(M=>M.sym);
+  const inc = models.filter(M=>M.mode==='selling');
+  const pausedList = models.filter(M=>M.mode==='paused').map(M=>M.sym);
   const nowB = inc.reduce((a,M)=>a+M.nowBTC,0), nowU = inc.reduce((a,M)=>a+M.nowUSD,0);
   const remG = inc.reduce((a,M)=>a+M.remainGet,0), remN = inc.reduce((a,M)=>a+M.remainNow,0);
   document.getElementById('tNow').textContent = fmtBTC(nowB);
@@ -635,7 +647,8 @@ function renderDynamic(){
   document.getElementById('tAll').textContent = fmtBTC(remG);
   document.getElementById('tAllX').textContent = remN>0 ? fmtX(remG/remN)+' what those coins are worth today' : '';
   const soldCount = inc.reduce((a,M)=>a+M.rungs.filter(r=>r.done).length,0);
-  document.getElementById('tFine').textContent = `${inc.length} of ${models.length} coins in the plan${soldCount?`, ${soldCount} rung${soldCount>1?'s':''} sold so far`:''}.${pausedList.length?` Alerts paused, not counted: ${pausedList.join(', ')}.`:''}${draft?' Showing unsaved changes.':''}`;
+  const offCount = models.filter(M=>M.mode==='off').length;
+  document.getElementById('tFine').textContent = `${inc.length} selling${pausedList.length?`, ${pausedList.length} paused (${pausedList.join(', ')}, not counted)`:''}, ${offCount} not tracked${soldCount?`. ${soldCount} rung${soldCount>1?'s':''} sold so far`:''}.${draft?' Showing unsaved changes.':''}`;
 
   const lines = inc.filter(M=>M.open.length).sort((a,b)=>b.nowUSD-a.nowUSD).map(M=>`${M.sym}: ${M.open.map(r=>fmtSats(r.target)).join(' / ')} sats  (≈ ${M.open.map(r=>fmtPx(r.usd)).join(' / ')})`);
   document.getElementById('alertText').textContent = `BTC at $${nf0.format(btcUsd())}\n\n`+lines.join('\n');
@@ -644,7 +657,7 @@ function renderDynamic(){
   document.getElementById('notes').innerHTML = `
     <p><strong>Live prices</strong> come from CoinGecko each time you open the page and every two minutes while it’s open. The hourly alert check uses exchange prices (Binance, Gate.io, MEXC), so the two can differ by a fraction of a percent.</p>
     <p><strong>History</strong> (the chart line and past lows) is rebuilt once a day by the alert workflow, last on ${fmtDate(F.market.obj.updated)}. The 30/90-day and 1-year changes compare today’s live price with that history, so they’re always current. The high is the best daily ALT/BTC close between 1 Nov 2024 and 30 Nov 2025, a finished window, so it no longer changes.</p>
-    <p><strong>Pausing alerts</strong> on a coin keeps its rungs but stops the hourly check from looking at it and leaves it out of the totals. Switch it back on any time.</p>
+    <p><strong>Each coin</strong> is Selling (rungs and alerts on), Paused (rungs kept, no alerts, not counted in the totals) or Not tracked (no rungs). Changes to this, to holdings and to the ladder all take effect when you save.</p>
     <p><strong>Rungs are fixed when you save.</strong> Geometric rungs split the gap to the high in multiplicative steps; linear ones in straight price terms, which puts the first rungs much further away. Coins with a sold rung keep their rungs when the ladder changes.</p>
     ${partial.length?`<p><strong>Short history:</strong> ${partial.map(esc).join(', ')}. Their price data starts after November 2024, so their highs are understated.</p>`:''}
     <p><strong>What this isn’t.</strong> Reference levels from past prices, not forecasts or advice. Old BTC-ratio highs may never come back, and fees and thin order books cut into the numbers.</p>`;
@@ -655,7 +668,9 @@ function renderDynamic(){
     const P = plan();
     const parts = [];
     if(P.changed.length) parts.push(`${P.changed.length} coin${P.changed.length>1?'s get':' gets'} new rungs`);
-    if(P.removed.length) parts.push(`${P.removed.length} leave${P.removed.length>1?'':'s'} the plan`);
+    if(P.resized.length) parts.push(`${P.resized.length} new amount${P.resized.length>1?'s':''}`);
+    if(P.modeChanged.length) parts.push(`${P.modeChanged.length} paused/resumed`);
+    if(P.removed.length) parts.push(`${P.removed.length} no longer tracked`);
     document.getElementById('saveInfo').textContent = 'Unsaved changes' + (parts.length? ': '+parts.join(', ') : '') + '.';
     bar.hidden = false; document.body.classList.add('dirty');
   } else { bar.hidden = true; document.body.classList.remove('dirty'); }
@@ -697,15 +712,6 @@ async function setSold(key, sold){
     await commit('portfolio', 'portfolio.json', `${sold?'Reduce':'Restore'} ${sym} holding for rung ${n}`, obj=>{
       const c = obj.coins[sym]; c.qty = +Math.max(0, c.qty + (sold?-1:1)*rung.sell_qty).toPrecision(10); return obj; });
     toast(sold ? `${sym} rung ${n} marked as sold. Holding lowered by ${fmtQty(rung.sell_qty)} ${sym}.` : `${sym} rung ${n} is open again.`);
-  }catch(e){ toast('Could not update: '+e.message, true); }
-  busy = false; renderDynamic();
-}
-async function setPaused(sym, paused){
-  if(busy || draft) return;
-  busy = true; renderDynamic();
-  try{
-    await commit('targets', 'targets.json', `${paused?'Pause':'Resume'} alerts for ${sym}`, obj=>{ if(paused) obj.coins[sym].paused = true; else delete obj.coins[sym].paused; return obj; });
-    toast(paused ? `Alerts paused for ${sym}. Its rungs are kept.` : `Alerts back on for ${sym}.`);
   }catch(e){ toast('Could not update: '+e.message, true); }
   busy = false; renderDynamic();
 }
@@ -777,6 +783,9 @@ document.addEventListener('click', e=>{
     if(!t.classList.contains('arm')){ t.classList.add('arm'); t.dataset.label=t.textContent; t.textContent='Sure?'; clearTimeout(armT[key]); armT[key]=setTimeout(()=>{ t.classList.remove('arm'); t.textContent=t.dataset.label; }, 4000); return; }
     clearTimeout(armT[key]); setSold(key, sold); return;
   }
+  if(t.dataset.mode){ const [s,k]=t.dataset.mode.split(':');
+    editDraft(d=>{ const c = d.coins[s] = Object.assign({qty:0}, d.coins[s]); c.include = k!=='off'; if(k==='paused') c.paused = true; else delete c.paused; });
+    renderDynamic(); return; }
   if(t.dataset.scale){ editDraft(d=>d.ladder.scale=t.dataset.scale); render(); return; }
   if(t.dataset.sort){ ui.sort=t.dataset.sort; writeLS(LS_UI, ui); render(); return; }
   if(t.id==='resetLad'){ editDraft(d=>d.ladder=clone(DEFAULT_LADDER)); render(); return; }
@@ -803,8 +812,6 @@ document.addEventListener('input', e=>{
 });
 document.addEventListener('change', e=>{
   const t = e.target;
-  if(t.dataset.pause){ setPaused(t.dataset.pause, !t.checked); return; }
-  if(t.dataset.inc){ const s=t.dataset.inc; editDraft(d=>{ d.coins[s] = Object.assign({qty:0}, d.coins[s], {include:t.checked}); }); renderDynamic(); return; }
   if(t.dataset.qty){ const s=t.dataset.qty, v=parseFloat(t.value); if(!(v>=0)) return; editDraft(d=>{ d.coins[s] = Object.assign({include:false}, d.coins[s], {qty:v}); }); renderDynamic(); return; }
 });
 document.addEventListener('keydown', e=>{ if(e.key==='Enter' && e.target.closest('#unlock')) document.getElementById('unlockBtn').click(); });
