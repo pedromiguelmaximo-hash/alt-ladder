@@ -6,6 +6,7 @@
 <meta name="robots" content="noindex, nofollow">
 <title>Alts, priced in bitcoin</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🪜</text></svg>">
+<script>try{var th=(JSON.parse(localStorage.getItem('altladder:ui')||'{}').theme)||'dark';if(th!=='auto')document.documentElement.setAttribute('data-theme',th);}catch(e){document.documentElement.setAttribute('data-theme','dark');}</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,300..900&display=swap" rel="stylesheet">
@@ -207,6 +208,17 @@ body.dirty .toast{bottom:calc(96px + env(safe-area-inset-bottom,0px))}
 .err{color:var(--down)}
 .qtyin{width:9em;padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:var(--bg)}
 .settings{font-size:.88rem;color:var(--muted)}
+.settings .row{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;margin:0 0 14px}
+.coin.paused .rail .rung,.coin.paused .rail .peak{background:var(--faint)}
+.coin.paused .rail .gap{opacity:.25}
+.coin.paused .rail .now{border-color:var(--faint)}
+.chip.paused{border-color:var(--faint);color:var(--muted)}
+.switch{display:inline-flex;align-items:center;gap:8px;cursor:pointer}
+.switch input{appearance:none;-webkit-appearance:none;width:38px;height:22px;border-radius:22px;background:var(--rail);position:relative;cursor:pointer;transition:background .15s;margin:0}
+.switch input::after{content:"";position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:var(--surface);transition:left .15s}
+.switch input:checked{background:var(--btc)}
+.switch input:checked::after{left:19px}
+.switch input:disabled{opacity:.45;cursor:not-allowed}
 .settings p{margin:0 0 8px}
 </style>
 </head>
@@ -230,6 +242,7 @@ body.dirty .toast{bottom:calc(96px + env(safe-area-inset-bottom,0px))}
       <div class="status" id="status"></div>
       <div class="actions">
         <button type="button" class="btn small" id="checkBtn">Run alert check now</button>
+        <button type="button" class="btn small ghost" id="testBtn">Send test notification</button>
         <button type="button" class="btn small ghost" id="reloadBtn">Reload</button>
       </div>
     </header>
@@ -290,6 +303,12 @@ body.dirty .toast{bottom:calc(96px + env(safe-area-inset-bottom,0px))}
 
     <h2>This device</h2>
     <div class="settings">
+      <div class="row"><span>Theme</span>
+        <div class="seg" role="group" aria-label="Theme">
+          <button type="button" data-theme-set="dark">Dark</button>
+          <button type="button" data-theme-set="light">Light</button>
+          <button type="button" data-theme-set="auto">Match phone</button>
+        </div></div>
       <p id="connInfo"></p>
       <button type="button" class="btn small ghost" id="lockBtn">Lock and forget the token</button>
     </div>
@@ -316,7 +335,7 @@ function writeLS(k,v){ try{ if(v===null) localStorage.removeItem(k); else localS
 const clone = o => JSON.parse(JSON.stringify(o));
 
 let auth = readLS(LS_AUTH);
-let ui = Object.assign({sort:'value', dust:20}, readLS(LS_UI)||{});
+let ui = Object.assign({sort:'value', dust:20, theme:'dark'}, readLS(LS_UI)||{});
 let openPanels = {};
 let branch = 'main';
 const F = {market:null, portfolio:null, targets:null, state:null}; // {obj, sha}
@@ -433,6 +452,7 @@ function computeTargets(p){
     p.ladder.rungs.forEach((r,i)=>{ const s=Math.max(0,+r.s||0), f=Math.max(0,Math.min(100,+r.f||0))/100; if(s<=0) return;
       rungs.push({n:i+1, sats:+(targetOf(pr.ratio,m.peak,f,p.ladder.scale)*1e8).toPrecision(5), sell_qty:+(c.qty*s/100).toPrecision(6)}); });
     coins[sym] = {name:m.name, qty:c.qty, peak_sats:+(m.peak*1e8).toPrecision(5), rungs};
+    if(ex && ex.paused) coins[sym].paused = true;
     changed.push(sym);
   }
   const removed = Object.keys(saved).filter(s=>!coins[s]);
@@ -455,9 +475,19 @@ function coinModel(sym){
   const rungs = (t ? t.rungs : []).map(r=>{ const target=r.sats/1e8; return Object.assign({}, r, {target, usd:target*btc, move:target/ratio-1, get:r.sell_qty*target, status:rungStatus(sym,r,ratio)}); });
   const open = rungs.filter(r=>!r.done);
   const next = open.filter(r=>r.status!=='reached')[0] || null;
-  return {sym, m, c, pr, ratio, include:!!c.include, above:ratio>=m.peak, rungs, open, next,
+  const paused = !!(t && t.paused);
+  const ch = {c30: liveChange(sym, ratio, 30, m.c30), c90: liveChange(sym, ratio, 90, m.c90), c365: liveChange(sym, ratio, 365, m.c365)};
+  const low = m.low ? Math.min(m.low, ratio) : null;
+  return {sym, m, c, pr, ratio, include:!!c.include, paused, ch, low, above:ratio>=m.peak, rungs, open, next,
     nowBTC:c.qty*ratio, nowUSD:c.qty*pr.usd, room:m.peak/ratio, planned:!!t, changed:P.changed.includes(sym),
     remainGet:open.reduce((a,r)=>a+r.get,0), remainNow:open.reduce((a,r)=>a+r.sell_qty*ratio,0)};
+}
+function liveChange(sym, ratio, days, fallback){
+  const sp = F.market.obj.coins[sym].spark; if(!sp || !sp.length || !ratio) return fallback;
+  const cut = new Date(Date.now()-days*86400000).toISOString().slice(0,10);
+  let past = null; for(const p of sp){ if(p[0] <= cut) past = p; else break; }
+  if(!past) return fallback;
+  return ratio/(past[1]/1e8) - 1;
 }
 function pos(v, peak){ const x = 1 - Math.log(peak/v)/Math.log(SPAN); return Math.max(0, Math.min(1, x)); }
 
@@ -466,7 +496,7 @@ function railHTML(M){
   const pk = M.m.peak, xNow = M.above ? 1 : pos(M.ratio, pk);
   let h = '<div class="rail"><div class="base"></div>';
   if(!M.above) h += `<div class="gap" style="left:${xNow*100}%;right:0"></div>`;
-  if(M.m.low && M.m.low < pk) h += `<div class="lowt" style="left:${pos(M.m.low,pk)*100}%"></div>`;
+  if(M.low && M.low < pk) h += `<div class="lowt" style="left:${pos(M.low,pk)*100}%"></div>`;
   M.rungs.forEach(r=>{ if(r.target < pk*0.999) h += `<div class="rung ${r.status==='sold'?'sold':r.status==='reached'?'reached':''}" style="left:${pos(r.target,pk)*100}%"></div>`; });
   h += '<div class="peak"></div>';
   h += M.above ? '<div class="now" style="left:auto;right:-7px"></div>' : `<div class="now" style="left:${xNow*100}%"></div>`;
@@ -494,8 +524,8 @@ function detailHTML(M){
   h += `<p><span>Now${M.pr.live?'':' (last close, live price unavailable)'}</span><br><b>${fmtSats(M.ratio)} sats</b> at ${fmtPx(M.pr.usd)}</p>`;
   h += `<p><span>2024–25 high vs BTC</span><br><b>${fmtSats(c.peak)} sats</b> on ${fmtDate(c.peakDate)} (${sym} ${fmtPx(c.peakPx)}, BTC $${nf0.format(c.peakBtc)})</p>`;
   h += `<p><span>Highest dollar close in the window</span><br>${fmtPx(c.usdHigh)} on ${fmtDate(c.usdHighDate)}</p>`;
-  if(c.low) h += `<p><span>Low since Nov 2025</span><br>${fmtSats(c.low)} sats on ${fmtDate(c.lowDate)}</p>`;
-  h += `<p><span>Change vs BTC (to ${fmtDate(F.market.obj.asOf)})</span><br>30d <b class="${c.c30>=0?'up':'down'}">${fmtPct(c.c30)}</b>, 90d <b class="${c.c90>=0?'up':'down'}">${fmtPct(c.c90)}</b>, 1y <b class="${c.c365>=0?'up':'down'}">${fmtPct(c.c365)}</b></p>`;
+  if(M.low) h += M.low < c.low ? `<p><span>Low since Nov 2025</span><br>today (${fmtSats(M.low)} sats)</p>` : `<p><span>Low since Nov 2025</span><br>${fmtSats(c.low)} sats on ${fmtDate(c.lowDate)}</p>`;
+  h += `<p><span>Change vs BTC${M.pr.live?', live':''}</span><br>30d <b class="${M.ch.c30>=0?'up':'down'}">${fmtPct(M.ch.c30)}</b>, 90d <b class="${M.ch.c90>=0?'up':'down'}">${fmtPct(M.ch.c90)}</b>, 1y <b class="${M.ch.c365>=0?'up':'down'}">${fmtPct(M.ch.c365)}</b></p>`;
   h += `<p><span>Holding</span><br>${fmtQty(M.c.qty)} ${sym}, ${fmtUSD(M.nowUSD)}, ${fmtBTC(M.nowBTC)}</p>`;
   h += '</div>';
   h += `<div class="chart">${sparkSVG(M)}<p class="chartkey">Shaded: Nov 2024 – Nov 2025. Solid orange: the high. Dashed: rungs (grey once sold).</p></div>`;
@@ -520,8 +550,10 @@ function detailHTML(M){
     else h += `<p class="note">“Sold” (tap twice) records the rung as done in your repository and lowers the holding by the rung’s amount, so it never alerts again.</p>`;
     if(M.open.length>1 && M.remainNow*btcUsd()/M.open.length < 10) h += `<p class="note err">Each rung here is under $10, below many exchanges’ minimum order.</p>`;
   }
+  if(M.paused) h += `<p class="note">Alerts are paused for ${sym}. Its rungs are kept but it isn’t checked, and it’s left out of the totals and the alert list.</p>`;
   if(c.partial) h += `<p class="note err">Price history for ${sym} only starts ${fmtDate(c.first)}, so the real 2024–25 high may have been higher.</p>`;
   h += `<div class="dctl"><label><input type="checkbox" data-inc="${sym}" ${M.include?'checked':''}> In the plan</label>`;
+  if(M.planned && !M.changed) h += `<label class="switch"><input type="checkbox" role="switch" data-pause="${sym}" ${M.paused?'':'checked'} ${draft||busy?'disabled':''}> Alerts</label>`;
   h += `<label>Holding <input class="qtyin" type="number" step="any" min="0" inputmode="decimal" data-qty="${sym}" value="${M.c.qty}"></label></div>`;
   return h;
 }
@@ -536,14 +568,15 @@ function coinHTML(M){
   else info = `<span><b>${fmtX(M.room)}</b> to high</span>`;
   const counts = {}; M.rungs.forEach(r=>{ if(CHIP[r.status]) counts[r.status]=(counts[r.status]||0)+1; });
   let chips = ''; ['reached','close','hitbefore','sold'].forEach(k=>{ if(counts[k]) chips += `<span class="chip ${CHIP[k][0]}">${counts[k]>1?counts[k]+' ':''}${CHIP[k][1]}</span>`; });
+  if(M.paused) chips = '<span class="chip paused">alerts paused</span>';
   if(M.changed) chips += '<span class="chip preview">new rungs</span>';
   if(M.m.partial) chips += '<span class="chip">short history</span>';
-  return `<article class="coin${M.include?'':' off'}" data-sym="${sym}">
+  return `<article class="coin${M.include?'':' off'}${M.paused?' paused':''}" data-sym="${sym}">
   <button type="button" class="head" aria-expanded="${open}" aria-controls="d-${sym}" data-toggle="${sym}">
     <div class="row1"><div><span class="sym">${sym}</span><span class="name">${esc(M.m.name)}</span></div>
       <div class="val"><b>${fmtUSD(M.nowUSD)}</b><small>${fmtBTC(M.nowBTC)}</small></div></div>
     ${railHTML(M)}
-    <div class="row3">${info}<span>30d vs BTC <b class="${M.m.c30>=0?'up':'down'}">${fmtPct(M.m.c30)}</b></span>${chips}</div>
+    <div class="row3">${info}<span>30d vs BTC <b class="${M.ch.c30>=0?'up':'down'}">${fmtPct(M.ch.c30)}</b></span>${chips}</div>
   </button>
   <div class="detail" id="d-${sym}" ${open?'':'hidden'}>${open?detailHTML(M):''}</div>
 </article>`;
@@ -572,6 +605,7 @@ function render(){
   document.querySelectorAll('[data-scale]').forEach(b=>b.setAttribute('aria-pressed', b.dataset.scale===l.scale));
   document.querySelectorAll('[data-sort]').forEach(b=>b.setAttribute('aria-pressed', b.dataset.sort===ui.sort));
   document.getElementById('dust').value = ui.dust;
+  applyTheme();
   renderDynamic();
 }
 function renderDynamic(){
@@ -583,8 +617,8 @@ function renderDynamic(){
   document.getElementById('scaleExplain').textContent = (l.scale==='geo'?'Geometric':'Linear')+': a coin that needs 10× gets rungs at '+l.rungs.map(r=>fmtX(l.scale==='geo'?Math.pow(10,(+r.f||0)/100):1+9*(+r.f||0)/100)).join(', ')+'.';
 
   const models = Object.keys(F.market.obj.coins).map(coinModel);
-  const nextKey = M => M.next ? M.next.move : (M.include ? 1e6 : 2e6);
-  const sorter = {value:(a,b)=>b.nowUSD-a.nowUSD, next:(a,b)=>nextKey(a)-nextKey(b), m30:(a,b)=>(b.m.c30??-9)-(a.m.c30??-9)}[ui.sort] || ((a,b)=>b.nowUSD-a.nowUSD);
+  const nextKey = M => M.paused ? 1.5e6 : M.next ? M.next.move : (M.include ? 1e6 : 2e6);
+  const sorter = {value:(a,b)=>b.nowUSD-a.nowUSD, next:(a,b)=>nextKey(a)-nextKey(b), m30:(a,b)=>(b.ch.c30??-9)-(a.ch.c30??-9)}[ui.sort] || ((a,b)=>b.nowUSD-a.nowUSD);
   models.sort(sorter);
   const big = models.filter(M=>M.nowUSD>=ui.dust || M.changed), small = models.filter(M=>!(M.nowUSD>=ui.dust || M.changed));
   document.getElementById('axis').innerHTML = [25,10,5,2,1].map(k=>`<span style="left:${pos(1/k,1)*100}%">${k===1?'high':k+'×'}</span>`).join('');
@@ -592,7 +626,8 @@ function renderDynamic(){
   document.getElementById('small').innerHTML = small.map(coinHTML).join('');
   document.getElementById('smallSum').textContent = `${small.length} coins, ${fmtUSD(small.reduce((a,M)=>a+M.nowUSD,0))}`;
 
-  const inc = models.filter(M=>M.include);
+  const inc = models.filter(M=>M.include && !M.paused);
+  const pausedList = models.filter(M=>M.include && M.paused).map(M=>M.sym);
   const nowB = inc.reduce((a,M)=>a+M.nowBTC,0), nowU = inc.reduce((a,M)=>a+M.nowUSD,0);
   const remG = inc.reduce((a,M)=>a+M.remainGet,0), remN = inc.reduce((a,M)=>a+M.remainNow,0);
   document.getElementById('tNow').textContent = fmtBTC(nowB);
@@ -600,7 +635,7 @@ function renderDynamic(){
   document.getElementById('tAll').textContent = fmtBTC(remG);
   document.getElementById('tAllX').textContent = remN>0 ? fmtX(remG/remN)+' what those coins are worth today' : '';
   const soldCount = inc.reduce((a,M)=>a+M.rungs.filter(r=>r.done).length,0);
-  document.getElementById('tFine').textContent = `${inc.length} of ${models.length} coins in the plan${soldCount?`, ${soldCount} rung${soldCount>1?'s':''} sold so far`:''}.${draft?' Showing unsaved changes.':''}`;
+  document.getElementById('tFine').textContent = `${inc.length} of ${models.length} coins in the plan${soldCount?`, ${soldCount} rung${soldCount>1?'s':''} sold so far`:''}.${pausedList.length?` Alerts paused, not counted: ${pausedList.join(', ')}.`:''}${draft?' Showing unsaved changes.':''}`;
 
   const lines = inc.filter(M=>M.open.length).sort((a,b)=>b.nowUSD-a.nowUSD).map(M=>`${M.sym}: ${M.open.map(r=>fmtSats(r.target)).join(' / ')} sats  (≈ ${M.open.map(r=>fmtPx(r.usd)).join(' / ')})`);
   document.getElementById('alertText').textContent = `BTC at $${nf0.format(btcUsd())}\n\n`+lines.join('\n');
@@ -608,7 +643,8 @@ function renderDynamic(){
   const partial = Object.entries(F.market.obj.coins).filter(([s,c])=>c.partial).map(([s])=>s);
   document.getElementById('notes').innerHTML = `
     <p><strong>Live prices</strong> come from CoinGecko each time you open the page and every two minutes while it’s open. The hourly alert check uses exchange prices (Binance, Gate.io, MEXC), so the two can differ by a fraction of a percent.</p>
-    <p><strong>History</strong> (the chart, the high, the low and the 30/90-day changes) is rebuilt once a day by the alert workflow; last on ${fmtDate(F.market.obj.updated)}. The high is the best daily ALT/BTC close between 1 Nov 2024 and 30 Nov 2025.</p>
+    <p><strong>History</strong> (the chart line and past lows) is rebuilt once a day by the alert workflow, last on ${fmtDate(F.market.obj.updated)}. The 30/90-day and 1-year changes compare today’s live price with that history, so they’re always current. The high is the best daily ALT/BTC close between 1 Nov 2024 and 30 Nov 2025, a finished window, so it no longer changes.</p>
+    <p><strong>Pausing alerts</strong> on a coin keeps its rungs but stops the hourly check from looking at it and leaves it out of the totals. Switch it back on any time.</p>
     <p><strong>Rungs are fixed when you save.</strong> Geometric rungs split the gap to the high in multiplicative steps; linear ones in straight price terms, which puts the first rungs much further away. Coins with a sold rung keep their rungs when the ladder changes.</p>
     ${partial.length?`<p><strong>Short history:</strong> ${partial.map(esc).join(', ')}. Their price data starts after November 2024, so their highs are understated.</p>`:''}
     <p><strong>What this isn’t.</strong> Reference levels from past prices, not forecasts or advice. Old BTC-ratio highs may never come back, and fees and thin order books cut into the numbers.</p>`;
@@ -624,6 +660,7 @@ function renderDynamic(){
     bar.hidden = false; document.body.classList.add('dirty');
   } else { bar.hidden = true; document.body.classList.remove('dirty'); }
   document.getElementById('checkBtn').disabled = busy;
+  document.getElementById('testBtn').disabled = busy;
   renderStatus();
 }
 
@@ -662,6 +699,26 @@ async function setSold(key, sold){
     toast(sold ? `${sym} rung ${n} marked as sold. Holding lowered by ${fmtQty(rung.sell_qty)} ${sym}.` : `${sym} rung ${n} is open again.`);
   }catch(e){ toast('Could not update: '+e.message, true); }
   busy = false; renderDynamic();
+}
+async function setPaused(sym, paused){
+  if(busy || draft) return;
+  busy = true; renderDynamic();
+  try{
+    await commit('targets', 'targets.json', `${paused?'Pause':'Resume'} alerts for ${sym}`, obj=>{ if(paused) obj.coins[sym].paused = true; else delete obj.coins[sym].paused; return obj; });
+    toast(paused ? `Alerts paused for ${sym}. Its rungs are kept.` : `Alerts back on for ${sym}.`);
+  }catch(e){ toast('Could not update: '+e.message, true); }
+  busy = false; renderDynamic();
+}
+async function sendTest(){
+  try{
+    await gh(`${repoPath()}/actions/workflows/${WORKFLOW}/dispatches`, {method:'POST', body:JSON.stringify({ref:branch, inputs:{command:'test'}})});
+    toast('Test requested. The push should arrive within a minute or two.');
+    setTimeout(loadRun, 5000); setTimeout(loadRun, 40000);
+  }catch(e){ toast('Could not send the test: '+e.message, true); }
+}
+function applyTheme(){
+  if(ui.theme==='auto') document.documentElement.removeAttribute('data-theme'); else document.documentElement.setAttribute('data-theme', ui.theme);
+  document.querySelectorAll('[data-theme-set]').forEach(b=>b.setAttribute('aria-pressed', b.dataset.themeSet===ui.theme));
 }
 async function checkNow(){
   if(busy) return;
@@ -726,6 +783,8 @@ document.addEventListener('click', e=>{
   if(t.id==='saveBtn'){ saveDraft(); return; }
   if(t.id==='discardBtn'){ draft=null; render(); return; }
   if(t.id==='checkBtn'){ checkNow(); return; }
+  if(t.id==='testBtn'){ sendTest(); return; }
+  if(t.dataset.themeSet){ ui.theme=t.dataset.themeSet; writeLS(LS_UI, ui); applyTheme(); return; }
   if(t.id==='reloadBtn'){ reloadAll(); return; }
   if(t.id==='lockBtn'){ writeLS(LS_AUTH, {owner:auth.owner, repo:auth.repo}); auth={owner:auth.owner, repo:auth.repo}; location.reload(); return; }
   if(t.id==='copyBtn'){ const txt=document.getElementById('alertText').textContent, msg=document.getElementById('copyMsg');
@@ -744,6 +803,7 @@ document.addEventListener('input', e=>{
 });
 document.addEventListener('change', e=>{
   const t = e.target;
+  if(t.dataset.pause){ setPaused(t.dataset.pause, !t.checked); return; }
   if(t.dataset.inc){ const s=t.dataset.inc; editDraft(d=>{ d.coins[s] = Object.assign({qty:0}, d.coins[s], {include:t.checked}); }); renderDynamic(); return; }
   if(t.dataset.qty){ const s=t.dataset.qty, v=parseFloat(t.value); if(!(v>=0)) return; editDraft(d=>{ d.coins[s] = Object.assign({include:false}, d.coins[s], {qty:v}); }); renderDynamic(); return; }
 });
