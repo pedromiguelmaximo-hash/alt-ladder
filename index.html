@@ -1,0 +1,754 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<title>Alts, priced in bitcoin</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🪜</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,300..900&display=swap" rel="stylesheet">
+<style>
+
+:root{
+  --bg:#EDF0F4; --surface:#F8F9FB; --ink:#16202E; --muted:#5B6778; --faint:#8793A3;
+  --rail:#C6CEDA; --line:#D8DEE7; --btc:#D9770A; --btc-soft:rgba(217,119,10,.14);
+  --up:#1D7F53; --down:#B93A33; --focus:#2F6FDB;
+  --font:"Archivo","Helvetica Neue",Arial,system-ui,sans-serif;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#111925; --surface:#18222F; --ink:#E4E9F0; --muted:#94A1B3; --faint:#6C7A8D;
+    --rail:#2E3C4E; --line:#243142; --btc:#F7931A; --btc-soft:rgba(247,147,26,.16);
+    --up:#43C68E; --down:#F0716A; --focus:#7FA8F5; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#111925; --surface:#18222F; --ink:#E4E9F0; --muted:#94A1B3; --faint:#6C7A8D;
+  --rail:#2E3C4E; --line:#243142; --btc:#F7931A; --btc-soft:rgba(247,147,26,.16);
+  --up:#43C68E; --down:#F0716A; --focus:#7FA8F5; color-scheme:dark;
+}
+*,*::before,*::after{box-sizing:inherit}
+html{scroll-padding-top:env(safe-area-inset-top,0px);-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--font);font-size:16px;line-height:1.45;font-variant-numeric:tabular-nums}
+.wrap{max-width:860px;margin:0 auto;padding:28px 18px 64px}
+button,input,select{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--focus);outline-offset:2px;border-radius:4px}
+a{color:inherit}
+
+/* Header */
+h1{font-stretch:125%;font-weight:800;font-size:clamp(2rem,7vw,3.4rem);line-height:.98;letter-spacing:-.02em;margin:0 0 12px}
+.sub{color:var(--muted);max-width:60ch;margin:0 0 18px;font-size:1rem}
+.meta{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;font-size:.9rem;color:var(--muted)}
+.btcfield{display:inline-flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:6px 10px}
+.btcfield b{color:var(--btc);font-weight:700}
+.btcfield input{width:7.5em;border:0;background:transparent;font-weight:600;color:var(--ink);padding:0}
+.btcfield input:focus{outline:none}
+.btcfield:focus-within{outline:2px solid var(--focus);outline-offset:2px}
+
+/* Totals */
+.totals{display:grid;grid-template-columns:1fr 1fr;gap:0;margin:28px 0 8px;border-top:2px solid var(--ink)}
+.totals div{padding:14px 0 4px}
+.totals div+div{padding-left:18px;border-left:1px solid var(--line)}
+.totals .k{font-size:.85rem;color:var(--muted);margin:0 0 4px}
+.totals .v{font-stretch:87%;font-weight:700;font-size:clamp(1.35rem,4.6vw,2rem);line-height:1.1;margin:0}
+.totals .v.btc{color:var(--btc)}
+.totals .s{font-size:.85rem;color:var(--muted);margin:4px 0 0}
+.fine{font-size:.8rem;color:var(--faint);margin:6px 0 0}
+
+h2{font-stretch:112%;font-weight:750;font-size:1.25rem;margin:40px 0 6px;letter-spacing:-.01em}
+.h2note{color:var(--muted);font-size:.9rem;margin:0 0 14px;max-width:62ch}
+
+/* Ladder editor */
+.ladder{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px}
+.ladder table{width:100%;border-collapse:collapse;font-size:.92rem}
+.ladder th{font-weight:600;color:var(--muted);text-align:left;padding:4px 6px 8px;font-size:.82rem}
+.ladder td{padding:4px 6px;border-top:1px solid var(--line)}
+.ladder td:first-child{font-weight:700;width:3.5em}
+.num{width:5em;padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:var(--bg);text-align:right}
+.pct{color:var(--muted);margin-left:4px}
+.ladfoot{display:flex;flex-wrap:wrap;gap:12px 18px;align-items:center;justify-content:space-between;margin-top:12px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.seg button{border:0;background:transparent;padding:7px 12px;cursor:pointer;font-size:.88rem;color:var(--muted)}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--bg);font-weight:600}
+.link{background:none;border:0;padding:4px 0;color:var(--muted);text-decoration:underline;text-underline-offset:3px;cursor:pointer;font-size:.88rem}
+.warn{color:var(--down);font-size:.85rem}
+.explain{font-size:.85rem;color:var(--muted);margin:10px 0 0}
+
+/* List controls + axis */
+.controls{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;justify-content:space-between;margin:0 0 10px}
+.controls label{font-size:.88rem;color:var(--muted);display:inline-flex;align-items:center;gap:6px}
+.axis{position:relative;height:18px;margin:14px 0 2px;font-size:.72rem;color:var(--faint);font-stretch:87%}
+.axis span{position:absolute;transform:translateX(-50%);white-space:nowrap}
+.axis span:last-child{transform:translateX(-100%);color:var(--btc);font-weight:600}
+.axis span:first-child{transform:none}
+.railzone{margin-left:0}
+
+/* Coin rows */
+.coin{border-top:1px solid var(--line)}
+.coin.off .head{opacity:.45}
+.head{display:block;width:100%;text-align:left;background:none;border:0;padding:14px 0 12px;cursor:pointer}
+.row1{display:flex;justify-content:space-between;align-items:baseline;gap:12px}
+.sym{font-weight:800;font-stretch:112%;font-size:1.05rem;letter-spacing:.01em}
+.name{color:var(--muted);font-size:.85rem;margin-left:6px}
+.val{text-align:right;font-stretch:87%;white-space:nowrap}
+.val b{font-weight:650}
+.val small{display:block;color:var(--muted);font-size:.8rem}
+.rail{position:relative;height:20px;margin:8px 0 6px}
+.rail .base{position:absolute;left:0;right:0;top:9px;height:2px;background:var(--rail);border-radius:2px}
+.rail .gap{position:absolute;top:9px;height:2px;background:repeating-linear-gradient(90deg,var(--btc) 0 4px,transparent 4px 8px);opacity:.55}
+.rail .lowt{position:absolute;top:6px;width:2px;height:8px;background:var(--faint);transform:translateX(-1px)}
+.rail .rung{position:absolute;top:4px;width:2px;height:12px;background:var(--btc);transform:translateX(-1px)}
+.rail .peak{position:absolute;right:0;top:0;width:3px;height:20px;background:var(--btc)}
+.rail{margin-right:7px}
+.rail .now{position:absolute;top:3px;width:14px;height:14px;border-radius:50%;background:var(--surface);border:3px solid var(--btc);transform:translateX(-7px)}
+.rail .clip{position:absolute;left:-2px;top:2px;font-size:.75rem;color:var(--btc);font-weight:700}
+.row3{display:flex;flex-wrap:wrap;gap:4px 16px;font-size:.84rem;color:var(--muted)}
+.row3 b{color:var(--ink);font-weight:650}
+.up{color:var(--up)!important}.down{color:var(--down)!important}
+.tag{font-size:.75rem;border:1px solid var(--line);border-radius:6px;padding:0 6px;color:var(--muted)}
+.tag.hot{border-color:var(--btc);color:var(--btc)}
+
+.detail{padding:0 0 18px}
+.detail[hidden]{display:none}
+.facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px 22px;font-size:.87rem;margin:6px 0 14px}
+.facts p{margin:0}
+.facts span{color:var(--muted)}
+.chart{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 10px 6px;margin:0 0 12px}
+.chart svg{display:block;width:100%;height:150px}
+.chartlab{display:flex;justify-content:space-between;font-size:.72rem;color:var(--faint);margin-top:4px}
+.chartkey{font-size:.75rem;color:var(--muted);margin:6px 0 0}
+.scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.rungs{width:100%;border-collapse:collapse;font-size:.87rem;min-width:340px}
+.rungs td small{display:block;color:var(--muted);font-size:.76rem}
+.rungs th{text-align:right;font-weight:600;color:var(--muted);font-size:.78rem;padding:4px 8px;border-bottom:1px solid var(--line)}
+.rungs td{text-align:right;padding:7px 8px;border-bottom:1px solid var(--line);font-stretch:93%}
+.rungs th:first-child,.rungs td:first-child{text-align:left}
+.rungs td.get{color:var(--btc);font-weight:650}
+.rungs tfoot td{font-weight:700;border-bottom:0}
+.dctl{display:flex;flex-wrap:wrap;gap:10px 20px;align-items:center;margin-top:12px;font-size:.88rem}
+.dctl label{display:inline-flex;align-items:center;gap:8px;color:var(--muted)}
+.dctl input[type=number]{width:8.5em;padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:var(--bg)}
+.dctl input[type=checkbox]{width:18px;height:18px;accent-color:var(--btc)}
+.note{font-size:.82rem;color:var(--muted);margin:10px 0 0}
+.note.alert{color:var(--down)}
+
+details.group{margin-top:26px;border-top:2px solid var(--ink)}
+details.group>summary{cursor:pointer;padding:14px 0;font-weight:700;font-stretch:112%;list-style:none;display:flex;justify-content:space-between;gap:12px}
+details.group>summary::-webkit-details-marker{display:none}
+details.group>summary::before{content:"+";display:inline-block;width:1.1em;color:var(--btc)}
+details.group[open]>summary::before{content:"–"}
+details.group>summary span{font-weight:500;color:var(--muted);font-stretch:100%;font-size:.9rem}
+
+.alerts{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px}
+.alerts pre{margin:0;white-space:pre-wrap;word-break:break-word;font-family:var(--font);font-stretch:87%;font-size:.84rem;line-height:1.55;max-height:340px;overflow:auto}
+.btn{border:1px solid var(--ink);background:var(--ink);color:var(--bg);border-radius:10px;padding:8px 14px;font-weight:600;cursor:pointer;font-size:.9rem}
+.btn.ghost{background:transparent;color:var(--ink)}
+.notes{font-size:.88rem;color:var(--muted);max-width:66ch}
+.notes p{margin:0 0 10px}
+.notes strong{color:var(--ink);font-weight:650}
+.missing{font-size:.88rem;color:var(--muted);margin:14px 0 0}
+footer{margin-top:40px;font-size:.78rem;color:var(--faint)}
+@media (max-width:520px){
+  .wrap{padding:22px 14px 56px}
+  .totals{grid-template-columns:1fr}
+  .totals div+div{padding-left:0;border-left:0;border-top:1px solid var(--line)}
+}
+@media (prefers-reduced-motion:no-preference){
+  .detail:not([hidden]){animation:open .18s ease-out}
+  @keyframes open{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
+}
+
+/* additions for the self-hosted version */
+.status{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;font-size:.88rem;color:var(--muted);margin-top:4px}
+.status b{color:var(--ink);font-weight:650}
+.status .btcnow{font-stretch:87%;font-weight:700;font-size:1.05rem;color:var(--ink)}
+.status .btcnow span{color:var(--btc)}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--faint);margin-right:6px;vertical-align:1px}
+.dot.ok{background:var(--up)}.dot.bad{background:var(--down)}.dot.run{background:var(--btc)}
+.actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.btn.small{padding:6px 11px;font-size:.84rem}
+.btn[disabled]{opacity:.45;cursor:not-allowed}
+.chip{font-size:.72rem;font-weight:650;border-radius:6px;padding:1px 7px;border:1px solid var(--line);color:var(--muted);white-space:nowrap}
+.chip.reached{background:var(--btc);border-color:var(--btc);color:#fff}
+.chip.close{border-color:var(--btc);color:var(--btc)}
+.chip.sold{background:var(--line);color:var(--ink)}
+.chip.hitbefore{border-style:dashed;border-color:var(--btc);color:var(--btc)}
+.chip.preview{border-color:var(--focus);color:var(--focus)}
+.rail .rung.sold{background:var(--faint);opacity:.7}
+.rail .rung.reached{top:1px;height:18px}
+.rungs td .act{font-size:.78rem;padding:4px 9px;border-radius:8px;border:1px solid var(--line);background:transparent;color:var(--ink);cursor:pointer;white-space:nowrap}
+.rungs td .act.arm{border-color:var(--down);color:var(--down)}
+.rungs td .act[disabled]{opacity:.4;cursor:not-allowed}
+.rungs td{white-space:nowrap;padding:7px 6px}
+.rungs td .chip{display:inline-block;margin-top:4px}
+.rungs tr.done td{color:var(--faint)}
+.rungs tr.done td.get{color:var(--faint);text-decoration:line-through}
+.savebar{position:fixed;left:0;right:0;bottom:0;z-index:20;background:var(--surface);border-top:2px solid var(--btc);padding:12px 16px calc(12px + env(safe-area-inset-bottom,0px));display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;justify-content:space-between;box-shadow:0 -6px 24px rgba(0,0,0,.18)}
+.savebar[hidden]{display:none}
+.savebar p{margin:0;font-size:.9rem}
+.savebar div{display:flex;gap:8px}
+body.dirty .wrap{padding-bottom:140px}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));z-index:30;background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:10px;font-size:.9rem;max-width:min(92vw,520px);box-shadow:0 6px 24px rgba(0,0,0,.25)}
+body.dirty .toast{bottom:calc(96px + env(safe-area-inset-bottom,0px))}
+.toast[hidden]{display:none}
+.toast.err{background:var(--down);color:#fff}
+.unlock{max-width:460px;margin:8vh auto 0;background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:22px}
+.unlock h1{font-size:clamp(1.8rem,7vw,2.4rem)}
+.unlock label{display:block;font-size:.85rem;color:var(--muted);margin:14px 0 6px}
+.unlock input{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--bg)}
+.unlock .btn{margin-top:18px;width:100%;padding:11px}
+.unlock .fine{margin-top:12px}
+.err{color:var(--down)}
+.qtyin{width:9em;padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:var(--bg)}
+.settings{font-size:.88rem;color:var(--muted)}
+.settings p{margin:0 0 8px}
+</style>
+</head>
+<body>
+<div class="wrap" id="app">
+  <section class="unlock" id="unlock" hidden>
+    <h1>Alts, priced in bitcoin</h1>
+    <p class="sub" style="margin-bottom:6px">Unlock to load your ladder from your private repository.</p>
+    <label for="uOwner">GitHub username</label><input id="uOwner" autocomplete="username" autocapitalize="off" spellcheck="false">
+    <label for="uRepo">Private repository</label><input id="uRepo" value="alt-alerts" autocapitalize="off" spellcheck="false">
+    <label for="uToken">Access token</label><input id="uToken" type="password" autocomplete="off" spellcheck="false" placeholder="github_pat_…">
+    <button type="button" class="btn" id="unlockBtn">Unlock</button>
+    <p class="fine" id="unlockMsg"></p>
+    <p class="fine">The token is kept in this browser only and is sent to nothing except api.github.com. Create it at GitHub → Settings → Developer settings → Fine-grained tokens, limited to this one repository, with Contents and Actions set to read and write.</p>
+  </section>
+
+  <div id="main" hidden>
+    <header>
+      <h1>Alts, priced in bitcoin</h1>
+      <p class="sub">Each coin measured in sats against its best daily close versus BTC between Nov 2024 and Nov 2025, with your saved rungs on the way back.</p>
+      <div class="status" id="status"></div>
+      <div class="actions">
+        <button type="button" class="btn small" id="checkBtn">Run alert check now</button>
+        <button type="button" class="btn small ghost" id="reloadBtn">Reload</button>
+      </div>
+    </header>
+
+    <section class="totals" aria-live="polite">
+      <div><p class="k">Your alts in the plan, now</p><p class="v" id="tNow"></p><p class="s" id="tNowUsd"></p></div>
+      <div><p class="k">If the remaining rungs fill</p><p class="v btc" id="tAll"></p><p class="s" id="tAllX"></p></div>
+    </section>
+    <p class="fine" id="tFine"></p>
+
+    <h2>Ladder</h2>
+    <p class="h2note">Changing the ladder previews new rungs from live prices; nothing changes until you save. Coins with a sold rung keep their current rungs.</p>
+    <div class="ladder">
+      <table>
+        <thead><tr><th>Rung</th><th>Of the way back</th><th>Sell</th></tr></thead>
+        <tbody id="ladBody"></tbody>
+      </table>
+      <div class="ladfoot">
+        <div class="seg" role="group" aria-label="How rungs split the gap">
+          <button type="button" data-scale="geo">Geometric</button>
+          <button type="button" data-scale="lin">Linear</button>
+        </div>
+        <span id="sellSum"></span>
+        <button type="button" class="link" id="resetLad">Default ladder</button>
+      </div>
+      <p class="explain" id="scaleExplain"></p>
+    </div>
+
+    <h2>Positions</h2>
+    <p class="h2note">The dot is today’s ratio, the tall bar the 2024–25 high, orange ticks your rungs (grey once sold) and the small grey tick the lowest close since. All rows share one log scale. Tap a coin to see its chart and rungs, and to mark a rung as sold after you swap.</p>
+    <div class="controls">
+      <div class="seg" role="group" aria-label="Sort positions">
+        <button type="button" data-sort="value">Value</button>
+        <button type="button" data-sort="next">Next rung</button>
+        <button type="button" data-sort="m30">30d vs BTC</button>
+      </div>
+      <label>Small below $<input id="dust" class="num" type="number" min="0" step="1"></label>
+    </div>
+    <div class="axis" id="axis" aria-hidden="true"></div>
+    <div id="list"></div>
+    <details class="group" id="smallGroup">
+      <summary>Small positions <span id="smallSum"></span></summary>
+      <p class="h2note">Many exchanges set minimum orders around $5–10, and withdrawal fees can exceed these balances.</p>
+      <div id="small"></div>
+    </details>
+
+    <h2>Alert list</h2>
+    <p class="h2note">Remaining rung targets for coins in the plan, in sats and in dollars at today’s BTC price.</p>
+    <div class="alerts">
+      <pre id="alertText"></pre>
+      <div style="margin-top:10px;display:flex;gap:10px;align-items:center">
+        <button type="button" class="btn small" id="copyBtn">Copy list</button><span id="copyMsg" class="fine" style="margin:0"></span>
+      </div>
+    </div>
+
+    <h2>How this works</h2>
+    <div class="notes" id="notes"></div>
+
+    <h2>This device</h2>
+    <div class="settings">
+      <p id="connInfo"></p>
+      <button type="button" class="btn small ghost" id="lockBtn">Lock and forget the token</button>
+    </div>
+    <footer>Reference levels from past prices, not predictions or financial advice.</footer>
+  </div>
+</div>
+
+<div class="savebar" id="savebar" hidden>
+  <p id="saveInfo"></p>
+  <div><button type="button" class="btn small ghost" id="discardBtn">Discard</button><button type="button" class="btn small" id="saveBtn">Save to GitHub</button></div>
+</div>
+<div class="toast" id="toast" role="status" hidden></div>
+
+<script>
+const LS_AUTH = 'altladder:auth', LS_UI = 'altladder:ui';
+const GH = 'https://api.github.com';
+const CG = 'https://api.coingecko.com/api/v3/simple/price';
+const WORKFLOW = 'alerts.yml';
+const SPAN = 25, NEAR = 0.05;
+const DEFAULT_LADDER = {scale:'geo', rungs:[{f:25,s:25},{f:50,s:25},{f:75,s:25},{f:100,s:25}]};
+
+function readLS(k){ try{ return JSON.parse(localStorage.getItem(k)||'null'); }catch(e){ return null; } }
+function writeLS(k,v){ try{ if(v===null) localStorage.removeItem(k); else localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
+const clone = o => JSON.parse(JSON.stringify(o));
+
+let auth = readLS(LS_AUTH);
+let ui = Object.assign({sort:'value', dust:20}, readLS(LS_UI)||{});
+let openPanels = {};
+let branch = 'main';
+const F = {market:null, portfolio:null, targets:null, state:null}; // {obj, sha}
+let draft = null;
+let live = {btc:null, at:null, prices:{}, error:null};
+let lastRun = null;
+let busy = false;
+let planCache = null;
+
+/* ---------------- GitHub ---------------- */
+function b64dec(s){ const bin=atob(s.replace(/\s/g,'')); const b=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) b[i]=bin.charCodeAt(i); return new TextDecoder().decode(b); }
+function b64enc(str){ const b=new TextEncoder().encode(str); let bin=''; for(let i=0;i<b.length;i+=0x8000) bin+=String.fromCharCode.apply(null, b.subarray(i,i+0x8000)); return btoa(bin); }
+async function gh(path, opts={}){
+  const headers = {'Accept':'application/vnd.github+json','Authorization':'Bearer '+auth.token,'X-GitHub-Api-Version':'2022-11-28'};
+  if(opts.body) headers['Content-Type']='application/json';
+  const r = await fetch(GH+path, {method:opts.method||'GET', headers, body:opts.body, cache:'no-store'});
+  if(r.status===204) return null;
+  let data=null; try{ data=await r.json(); }catch(e){}
+  if(!r.ok){ const e=new Error((data&&data.message)||('GitHub error '+r.status)); e.status=r.status; throw e; }
+  return data;
+}
+const repoPath = () => `/repos/${encodeURIComponent(auth.owner)}/${encodeURIComponent(auth.repo)}`;
+async function getFile(name){
+  try{
+    const d = await gh(`${repoPath()}/contents/${name}?ref=${encodeURIComponent(branch)}`);
+    let txt;
+    if(d.content) txt = b64dec(d.content);
+    else { const r = await fetch(GH+`${repoPath()}/contents/${name}?ref=${encodeURIComponent(branch)}`, {headers:{'Accept':'application/vnd.github.raw+json','Authorization':'Bearer '+auth.token}, cache:'no-store'}); txt = await r.text(); }
+    return {obj:JSON.parse(txt), sha:d.sha};
+  }catch(e){ if(e.status===404) return {obj:null, sha:null}; throw e; }
+}
+async function commit(key, name, message, mutate){
+  for(let attempt=0; attempt<2; attempt++){
+    const next = mutate(clone(F[key].obj));
+    const body = {message, content:b64enc(JSON.stringify(next,null,2)+'\n'), branch};
+    if(F[key].sha) body.sha = F[key].sha;
+    try{
+      const d = await gh(`${repoPath()}/contents/${name}`, {method:'PUT', body:JSON.stringify(body)});
+      F[key] = {obj:next, sha:d.content.sha};
+      return;
+    }catch(e){
+      if((e.status===409||e.status===422) && attempt===0){ const fresh=await getFile(name); if(fresh.obj) F[key]=fresh; continue; }
+      throw e;
+    }
+  }
+}
+async function connect(){
+  const info = await gh(repoPath());
+  branch = info.default_branch || 'main';
+  const [m,p,t,s] = await Promise.all(['market.json','portfolio.json','targets.json','state.json'].map(getFile));
+  if(!m.obj) throw Object.assign(new Error('market.json is missing from the repository.'), {status:0});
+  if(!p.obj) throw Object.assign(new Error('portfolio.json is missing from the repository.'), {status:0});
+  F.market=m; F.portfolio=p;
+  F.targets = t.obj ? t : {obj:{coins:{}}, sha:null};
+  F.targets.obj.coins = F.targets.obj.coins || {};
+  F.state = s.obj ? s : {obj:{rungs:{}}, sha:null};
+  if(!F.portfolio.obj.ladder) F.portfolio.obj.ladder = clone(DEFAULT_LADDER);
+}
+async function loadRun(){
+  try{ const d = await gh(`${repoPath()}/actions/workflows/${WORKFLOW}/runs?per_page=1`); lastRun = (d.workflow_runs&&d.workflow_runs[0]) || {none:true}; }
+  catch(e){ lastRun = {error:e.message}; }
+  renderStatus();
+}
+async function loadPrices(){
+  const coins = F.market.obj.coins;
+  const ids = [...new Set(Object.values(coins).map(c=>c.cg).filter(Boolean).concat('bitcoin'))];
+  try{
+    const r = await fetch(`${CG}?ids=${ids.join(',')}&vs_currencies=usd,btc`, {cache:'no-store'});
+    if(!r.ok) throw new Error(r.status===429? 'CoinGecko rate limit, retrying shortly' : 'CoinGecko error '+r.status);
+    const d = await r.json();
+    const btc = d.bitcoin && d.bitcoin.usd; if(!btc) throw new Error('no BTC price');
+    const prices = {};
+    for(const [sym,c] of Object.entries(coins)){ const row=d[c.cg]; if(row && row.usd) prices[sym] = {usd:row.usd, ratio: row.btc || row.usd/btc}; }
+    live = {btc, at:new Date(), prices, error:null};
+  }catch(e){ live.error = e.message; }
+  renderDynamic();
+}
+
+/* ---------------- formatting ---------------- */
+const nf0 = new Intl.NumberFormat('en-US',{maximumFractionDigits:0});
+function fmtUSD(v){ if(v>=1000) return '$'+nf0.format(v); if(v>=0.01) return '$'+v.toFixed(2); return '$'+v.toFixed(3); }
+function fmtPx(p){ if(p>=1000) return '$'+nf0.format(p); if(p>=10) return '$'+p.toFixed(2); if(p>=1) return '$'+p.toFixed(3).replace(/0$/,''); let s=p.toPrecision(4); if(s.includes('e')) s=p.toFixed(12).replace(/0+$/,''); return '$'+s; }
+function fmtSats(r){ const v=r*1e8; if(v>=1000) return nf0.format(v); if(v>=1) return v.toFixed(2); return Number(v.toPrecision(3)).toString(); }
+function fmtBTC(b){ if(b>=0.001) return b.toFixed(b>=0.1?4:5)+' BTC'; return nf0.format(b*1e8)+' sats'; }
+function fmtPct(x,dec=1){ if(x===null||x===undefined||!isFinite(x)) return 'n/a'; return (x>=0?'+':'−')+Math.abs(x*100).toFixed(dec)+'%'; }
+function fmtX(x){ return x>=10? x.toFixed(0)+'×' : x.toFixed(2)+'×'; }
+const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+function fmtDate(d){ if(!d) return ''; const [y,m,dd]=d.slice(0,10).split('-'); return +dd+' '+MONTHS[+m-1]+' '+y; }
+function fmtQty(q){ if(q>=1e6) return (q/1e6).toFixed(q>=1e7?1:2)+'M'; if(q>=1000) return nf0.format(q); if(q>=1) return (+q.toFixed(2)).toString(); return (+q.toPrecision(3)).toString(); }
+function ago(ts){ const s=(Date.now()-new Date(ts).getTime())/1000; if(s<90) return 'just now'; if(s<3600) return Math.round(s/60)+' min ago'; if(s<86400*2) return Math.round(s/3600)+' h ago'; return Math.round(s/86400)+' days ago'; }
+function esc(s){ return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+let toastT;
+function toast(msg, err){ const t=document.getElementById('toast'); t.textContent=msg; t.className='toast'+(err?' err':''); t.hidden=false; clearTimeout(toastT); toastT=setTimeout(()=>t.hidden=true, err?7000:4000); }
+
+/* ---------------- model ---------------- */
+const pf = () => draft || F.portfolio.obj;
+const btcUsd = () => live.btc || F.market.obj.btc;
+function priceOf(sym){ const lp=live.prices[sym], m=F.market.obj.coins[sym]; return lp ? {usd:lp.usd, ratio:lp.ratio, live:true} : {usd:m.px, ratio:m.ratio, live:false}; }
+function targetOf(ratio, peak, f, scale){ return scale==='lin' ? ratio + f*(peak-ratio) : ratio*Math.pow(peak/ratio, f); }
+function ladderLabel(l){ return (l.scale==='lin'?'linear':'geometric')+': '+l.rungs.map(r=>r.f).join('/')+'% of the way back to the 2024-25 high, selling '+l.rungs.map(r=>r.s).join('/')+'%'; }
+
+function computeTargets(p){
+  const saved = F.targets.obj.coins, savedPf = F.portfolio.obj, M = F.market.obj.coins;
+  const ladderSame = JSON.stringify(p.ladder)===JSON.stringify(savedPf.ladder);
+  const coins = {}, changed = [];
+  for(const sym of Object.keys(M)){
+    const c = p.coins[sym]; if(!c || !c.include) continue;
+    const ex = saved[sym], sc = savedPf.coins[sym];
+    const qtySame = sc && sc.include && sc.qty===c.qty;
+    if(ex && (ex.rungs.some(r=>r.done) || (ladderSame && qtySame))){ coins[sym]=ex; continue; }
+    const pr = priceOf(sym), m = M[sym];
+    if(!pr.ratio || pr.ratio>=m.peak) continue;
+    const rungs = [];
+    p.ladder.rungs.forEach((r,i)=>{ const s=Math.max(0,+r.s||0), f=Math.max(0,Math.min(100,+r.f||0))/100; if(s<=0) return;
+      rungs.push({n:i+1, sats:+(targetOf(pr.ratio,m.peak,f,p.ladder.scale)*1e8).toPrecision(5), sell_qty:+(c.qty*s/100).toPrecision(6)}); });
+    coins[sym] = {name:m.name, qty:c.qty, peak_sats:+(m.peak*1e8).toPrecision(5), rungs};
+    changed.push(sym);
+  }
+  const removed = Object.keys(saved).filter(s=>!coins[s]);
+  return {coins, changed, removed};
+}
+function plan(){ if(!planCache) planCache = draft ? computeTargets(draft) : {coins:F.targets.obj.coins, changed:[], removed:[]}; return planCache; }
+function rungStatus(sym, r, ratio){
+  if(r.done) return 'sold';
+  const t = r.sats/1e8;
+  if(ratio >= t) return 'reached';
+  const st = (F.state.obj.rungs||{})[`${sym}:${r.n}`];
+  if(st && st.status==='hit' && Math.abs((st.target||r.sats)-r.sats) <= r.sats*1e-6) return 'hitbefore';
+  if(ratio >= t*(1-NEAR)) return 'close';
+  return '';
+}
+function coinModel(sym){
+  const P = plan(), m = F.market.obj.coins[sym], c = pf().coins[sym] || {qty:0, include:false};
+  const pr = priceOf(sym), ratio = pr.ratio, btc = btcUsd();
+  const t = P.coins[sym];
+  const rungs = (t ? t.rungs : []).map(r=>{ const target=r.sats/1e8; return Object.assign({}, r, {target, usd:target*btc, move:target/ratio-1, get:r.sell_qty*target, status:rungStatus(sym,r,ratio)}); });
+  const open = rungs.filter(r=>!r.done);
+  const next = open.filter(r=>r.status!=='reached')[0] || null;
+  return {sym, m, c, pr, ratio, include:!!c.include, above:ratio>=m.peak, rungs, open, next,
+    nowBTC:c.qty*ratio, nowUSD:c.qty*pr.usd, room:m.peak/ratio, planned:!!t, changed:P.changed.includes(sym),
+    remainGet:open.reduce((a,r)=>a+r.get,0), remainNow:open.reduce((a,r)=>a+r.sell_qty*ratio,0)};
+}
+function pos(v, peak){ const x = 1 - Math.log(peak/v)/Math.log(SPAN); return Math.max(0, Math.min(1, x)); }
+
+/* ---------------- rendering ---------------- */
+function railHTML(M){
+  const pk = M.m.peak, xNow = M.above ? 1 : pos(M.ratio, pk);
+  let h = '<div class="rail"><div class="base"></div>';
+  if(!M.above) h += `<div class="gap" style="left:${xNow*100}%;right:0"></div>`;
+  if(M.m.low && M.m.low < pk) h += `<div class="lowt" style="left:${pos(M.m.low,pk)*100}%"></div>`;
+  M.rungs.forEach(r=>{ if(r.target < pk*0.999) h += `<div class="rung ${r.status==='sold'?'sold':r.status==='reached'?'reached':''}" style="left:${pos(r.target,pk)*100}%"></div>`; });
+  h += '<div class="peak"></div>';
+  h += M.above ? '<div class="now" style="left:auto;right:-7px"></div>' : `<div class="now" style="left:${xNow*100}%"></div>`;
+  if(M.room > SPAN) h += '<span class="clip" title="Further than the scale shows">«</span>';
+  return h + '</div>';
+}
+function sparkSVG(M){
+  const c = M.m, pts = c.spark.map(p=>p[1]/1e8).concat([M.ratio]);
+  const vals = pts.concat([c.peak, ...M.rungs.map(r=>r.target)]);
+  let lo=Math.log(Math.min(...vals)*0.9), hi=Math.log(Math.max(...vals)*1.1);
+  const W=600, H=150, n=pts.length, X=i=>i/(n-1)*W, Y=v=>H-(Math.log(v)-lo)/(hi-lo)*H;
+  const wi0 = c.spark.findIndex(p=>p[0]>='2024-11-01'); let wi1=-1; c.spark.forEach((p,i)=>{ if(p[0]<='2025-11-30') wi1=i; });
+  let s = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="${esc(M.sym)} price in BTC since October 2024, log scale">`;
+  if(wi0>=0 && wi1>wi0) s += `<rect x="${X(wi0)}" y="0" width="${X(wi1)-X(wi0)}" height="${H}" fill="var(--btc-soft)"/>`;
+  M.rungs.forEach(r=>{ const y=Y(r.target); s += r.done ? `<line x1="0" x2="${W}" y1="${y}" y2="${y}" stroke="var(--faint)" stroke-width="1" stroke-dasharray="2 5" vector-effect="non-scaling-stroke"/>` : `<line x1="0" x2="${W}" y1="${y}" y2="${y}" stroke="var(--btc)" stroke-width="1" stroke-dasharray="4 4" vector-effect="non-scaling-stroke" opacity=".85"/>`; });
+  const yp=Y(c.peak); s += `<line x1="0" x2="${W}" y1="${yp}" y2="${yp}" stroke="var(--btc)" stroke-width="2" vector-effect="non-scaling-stroke"/>`;
+  s += `<polyline fill="none" stroke="var(--ink)" stroke-width="1.6" stroke-linejoin="round" vector-effect="non-scaling-stroke" points="${pts.map((v,i)=>X(i).toFixed(1)+','+Y(v).toFixed(1)).join(' ')}"/>`;
+  const yn=Y(M.ratio); s += `<line x1="${W-14}" x2="${W}" y1="${yn}" y2="${yn}" stroke="var(--btc)" stroke-width="6" stroke-linecap="round" vector-effect="non-scaling-stroke"/>`;
+  return s + `</svg><div class="chartlab"><span>${fmtDate(c.spark[0][0])}</span><span>log scale, closes in sats</span><span>now</span></div>`;
+}
+const CHIP = {sold:['sold','sold'], reached:['reached','reached'], close:['close','close'], hitbefore:['hitbefore','hit earlier']};
+function detailHTML(M){
+  const c = M.m, sym = esc(M.sym);
+  let h = '<div class="facts">';
+  h += `<p><span>Now${M.pr.live?'':' (last close, live price unavailable)'}</span><br><b>${fmtSats(M.ratio)} sats</b> at ${fmtPx(M.pr.usd)}</p>`;
+  h += `<p><span>2024–25 high vs BTC</span><br><b>${fmtSats(c.peak)} sats</b> on ${fmtDate(c.peakDate)} (${sym} ${fmtPx(c.peakPx)}, BTC $${nf0.format(c.peakBtc)})</p>`;
+  h += `<p><span>Highest dollar close in the window</span><br>${fmtPx(c.usdHigh)} on ${fmtDate(c.usdHighDate)}</p>`;
+  if(c.low) h += `<p><span>Low since Nov 2025</span><br>${fmtSats(c.low)} sats on ${fmtDate(c.lowDate)}</p>`;
+  h += `<p><span>Change vs BTC (to ${fmtDate(F.market.obj.asOf)})</span><br>30d <b class="${c.c30>=0?'up':'down'}">${fmtPct(c.c30)}</b>, 90d <b class="${c.c90>=0?'up':'down'}">${fmtPct(c.c90)}</b>, 1y <b class="${c.c365>=0?'up':'down'}">${fmtPct(c.c365)}</b></p>`;
+  h += `<p><span>Holding</span><br>${fmtQty(M.c.qty)} ${sym}, ${fmtUSD(M.nowUSD)}, ${fmtBTC(M.nowBTC)}</p>`;
+  h += '</div>';
+  h += `<div class="chart">${sparkSVG(M)}<p class="chartkey">Shaded: Nov 2024 – Nov 2025. Solid orange: the high. Dashed: rungs (grey once sold).</p></div>`;
+  if(!M.include){
+    h += `<p class="note">${sym} isn’t in the plan. Tick “In the plan” below and save to give it rungs.</p>`;
+  } else if(!M.rungs.length){
+    h += M.above ? `<p class="note">${sym} is ${Math.round((M.ratio/c.peak-1)*100)}% above its 2024–25 high in BTC terms, so there are no rungs below that level.</p>`
+                 : `<p class="note">No rungs saved for ${sym} yet. Save to create them.</p>`;
+  } else {
+    const locked = !!draft;
+    h += '<div class="scroll"><table class="rungs"><thead><tr><th>Rung</th><th>Target (sats)</th><th>vs BTC</th><th>Sell</th><th>You get</th><th></th></tr></thead><tbody>';
+    M.rungs.forEach(r=>{
+      const chip = CHIP[r.status] ? `<br><span class="chip ${CHIP[r.status][0]}">${CHIP[r.status][1]}</span>` : '';
+      const act = M.changed ? '' : r.done
+        ? `<button type="button" class="act" data-unsold="${sym}:${r.n}" ${locked?'disabled':''}>Undo</button>`
+        : `<button type="button" class="act" data-sold="${sym}:${r.n}" ${locked?'disabled':''}>Sold</button>`;
+      h += `<tr class="${r.done?'done':''}"><td>${r.n}${chip}</td><td>${fmtSats(r.target)}<small>≈ ${fmtPx(r.usd)}</small></td><td>${r.done?'':fmtPct(r.move,0)}</td><td>${fmtQty(r.sell_qty)}</td><td class="get">${fmtBTC(r.get)}</td><td>${act}</td></tr>`;
+    });
+    h += `</tbody><tfoot><tr><td colspan="4">Remaining</td><td class="get">${fmtBTC(M.remainGet)}</td><td></td></tr></tfoot></table></div>`;
+    if(M.changed) h += `<p class="note">Preview from live prices. Save to fix these rungs.</p>`;
+    else if(locked) h += `<p class="note">Save or discard your changes before marking rungs as sold.</p>`;
+    else h += `<p class="note">“Sold” (tap twice) records the rung as done in your repository and lowers the holding by the rung’s amount, so it never alerts again.</p>`;
+    if(M.open.length>1 && M.remainNow*btcUsd()/M.open.length < 10) h += `<p class="note err">Each rung here is under $10, below many exchanges’ minimum order.</p>`;
+  }
+  if(c.partial) h += `<p class="note err">Price history for ${sym} only starts ${fmtDate(c.first)}, so the real 2024–25 high may have been higher.</p>`;
+  h += `<div class="dctl"><label><input type="checkbox" data-inc="${sym}" ${M.include?'checked':''}> In the plan</label>`;
+  h += `<label>Holding <input class="qtyin" type="number" step="any" min="0" inputmode="decimal" data-qty="${sym}" value="${M.c.qty}"></label></div>`;
+  return h;
+}
+function coinHTML(M){
+  const sym = esc(M.sym), open = !!openPanels[M.sym];
+  let info;
+  if(!M.include) info = `<span>${M.above?'<b>above</b> its high':'<b>'+fmtX(M.room)+'</b> to high'}</span><span class="chip">not in plan</span>`;
+  else if(M.above && !M.rungs.length) info = '<span><b>above</b> its high</span>';
+  else if(M.next) info = `<span><b>${fmtPct(M.next.move,0)}</b> to rung ${M.next.n}</span><span>${fmtX(M.room)} to high</span>`;
+  else if(M.rungs.length && M.open.length===0) info = '<span><b>all rungs sold</b></span>';
+  else if(M.rungs.length) info = '<span><b>every open rung reached</b></span>';
+  else info = `<span><b>${fmtX(M.room)}</b> to high</span>`;
+  const counts = {}; M.rungs.forEach(r=>{ if(CHIP[r.status]) counts[r.status]=(counts[r.status]||0)+1; });
+  let chips = ''; ['reached','close','hitbefore','sold'].forEach(k=>{ if(counts[k]) chips += `<span class="chip ${CHIP[k][0]}">${counts[k]>1?counts[k]+' ':''}${CHIP[k][1]}</span>`; });
+  if(M.changed) chips += '<span class="chip preview">new rungs</span>';
+  if(M.m.partial) chips += '<span class="chip">short history</span>';
+  return `<article class="coin${M.include?'':' off'}" data-sym="${sym}">
+  <button type="button" class="head" aria-expanded="${open}" aria-controls="d-${sym}" data-toggle="${sym}">
+    <div class="row1"><div><span class="sym">${sym}</span><span class="name">${esc(M.m.name)}</span></div>
+      <div class="val"><b>${fmtUSD(M.nowUSD)}</b><small>${fmtBTC(M.nowBTC)}</small></div></div>
+    ${railHTML(M)}
+    <div class="row3">${info}<span>30d vs BTC <b class="${M.m.c30>=0?'up':'down'}">${fmtPct(M.m.c30)}</b></span>${chips}</div>
+  </button>
+  <div class="detail" id="d-${sym}" ${open?'':'hidden'}>${open?detailHTML(M):''}</div>
+</article>`;
+}
+function renderStatus(){
+  const el = document.getElementById('status'); if(!el || !F.market) return;
+  let h = `<span class="btcnow">BTC <span>$${nf0.format(btcUsd())}</span></span>`;
+  h += live.error ? `<span class="err">${esc(live.error)}. Showing last close from ${fmtDate(F.market.obj.asOf)}.</span>`
+                  : live.at ? `<span>Live prices, ${live.at.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</span>` : '<span>Loading live prices…</span>';
+  if(lastRun){
+    if(lastRun.error) h += `<span><i class="dot bad"></i>Alert check status unavailable: ${esc(lastRun.error)}</span>`;
+    else if(lastRun.none) h += `<span><i class="dot"></i>The alert check hasn’t run yet</span>`;
+    else {
+      const running = lastRun.status!=='completed', ok = lastRun.conclusion==='success';
+      const label = running ? 'running now' : (ok ? 'succeeded' : (lastRun.conclusion||'failed'));
+      h += `<span><i class="dot ${running?'run':ok?'ok':'bad'}"></i>Alert check ${label}, ${ago(lastRun.run_started_at||lastRun.created_at)} (<a href="${esc(lastRun.html_url)}" target="_blank" rel="noopener">log</a>)</span>`;
+    }
+  }
+  el.innerHTML = h;
+}
+function render(){
+  const l = pf().ladder;
+  document.getElementById('ladBody').innerHTML = l.rungs.map((r,i)=>`<tr><td>${i+1}</td>
+    <td><input class="num" type="number" min="0" max="100" step="1" data-lf="${i}" value="${r.f}" aria-label="Rung ${i+1} share of the way back"><span class="pct">%</span></td>
+    <td><input class="num" type="number" min="0" max="100" step="1" data-ls="${i}" value="${r.s}" aria-label="Rung ${i+1} share sold"><span class="pct">%</span></td></tr>`).join('');
+  document.querySelectorAll('[data-scale]').forEach(b=>b.setAttribute('aria-pressed', b.dataset.scale===l.scale));
+  document.querySelectorAll('[data-sort]').forEach(b=>b.setAttribute('aria-pressed', b.dataset.sort===ui.sort));
+  document.getElementById('dust').value = ui.dust;
+  renderDynamic();
+}
+function renderDynamic(){
+  if(!F.market) return;
+  planCache = null;
+  const l = pf().ladder;
+  const sum = l.rungs.reduce((a,r)=>a+(+r.s||0),0);
+  document.getElementById('sellSum').innerHTML = sum>100 ? `<span class="err">Sells add up to ${sum}%, over 100%</span>` : `Sells add up to ${sum}%${sum<100?`, keeping ${100-sum}%`:''}`;
+  document.getElementById('scaleExplain').textContent = (l.scale==='geo'?'Geometric':'Linear')+': a coin that needs 10× gets rungs at '+l.rungs.map(r=>fmtX(l.scale==='geo'?Math.pow(10,(+r.f||0)/100):1+9*(+r.f||0)/100)).join(', ')+'.';
+
+  const models = Object.keys(F.market.obj.coins).map(coinModel);
+  const nextKey = M => M.next ? M.next.move : (M.include ? 1e6 : 2e6);
+  const sorter = {value:(a,b)=>b.nowUSD-a.nowUSD, next:(a,b)=>nextKey(a)-nextKey(b), m30:(a,b)=>(b.m.c30??-9)-(a.m.c30??-9)}[ui.sort] || ((a,b)=>b.nowUSD-a.nowUSD);
+  models.sort(sorter);
+  const big = models.filter(M=>M.nowUSD>=ui.dust || M.changed), small = models.filter(M=>!(M.nowUSD>=ui.dust || M.changed));
+  document.getElementById('axis').innerHTML = [25,10,5,2,1].map(k=>`<span style="left:${pos(1/k,1)*100}%">${k===1?'high':k+'×'}</span>`).join('');
+  document.getElementById('list').innerHTML = big.map(coinHTML).join('');
+  document.getElementById('small').innerHTML = small.map(coinHTML).join('');
+  document.getElementById('smallSum').textContent = `${small.length} coins, ${fmtUSD(small.reduce((a,M)=>a+M.nowUSD,0))}`;
+
+  const inc = models.filter(M=>M.include);
+  const nowB = inc.reduce((a,M)=>a+M.nowBTC,0), nowU = inc.reduce((a,M)=>a+M.nowUSD,0);
+  const remG = inc.reduce((a,M)=>a+M.remainGet,0), remN = inc.reduce((a,M)=>a+M.remainNow,0);
+  document.getElementById('tNow').textContent = fmtBTC(nowB);
+  document.getElementById('tNowUsd').textContent = fmtUSD(nowU)+' at BTC $'+nf0.format(btcUsd());
+  document.getElementById('tAll').textContent = fmtBTC(remG);
+  document.getElementById('tAllX').textContent = remN>0 ? fmtX(remG/remN)+' what those coins are worth today' : '';
+  const soldCount = inc.reduce((a,M)=>a+M.rungs.filter(r=>r.done).length,0);
+  document.getElementById('tFine').textContent = `${inc.length} of ${models.length} coins in the plan${soldCount?`, ${soldCount} rung${soldCount>1?'s':''} sold so far`:''}.${draft?' Showing unsaved changes.':''}`;
+
+  const lines = inc.filter(M=>M.open.length).sort((a,b)=>b.nowUSD-a.nowUSD).map(M=>`${M.sym}: ${M.open.map(r=>fmtSats(r.target)).join(' / ')} sats  (≈ ${M.open.map(r=>fmtPx(r.usd)).join(' / ')})`);
+  document.getElementById('alertText').textContent = `BTC at $${nf0.format(btcUsd())}\n\n`+lines.join('\n');
+
+  const partial = Object.entries(F.market.obj.coins).filter(([s,c])=>c.partial).map(([s])=>s);
+  document.getElementById('notes').innerHTML = `
+    <p><strong>Live prices</strong> come from CoinGecko each time you open the page and every two minutes while it’s open. The hourly alert check uses exchange prices (Binance, Gate.io, MEXC), so the two can differ by a fraction of a percent.</p>
+    <p><strong>History</strong> (the chart, the high, the low and the 30/90-day changes) is rebuilt once a day by the alert workflow; last on ${fmtDate(F.market.obj.updated)}. The high is the best daily ALT/BTC close between 1 Nov 2024 and 30 Nov 2025.</p>
+    <p><strong>Rungs are fixed when you save.</strong> Geometric rungs split the gap to the high in multiplicative steps; linear ones in straight price terms, which puts the first rungs much further away. Coins with a sold rung keep their rungs when the ladder changes.</p>
+    ${partial.length?`<p><strong>Short history:</strong> ${partial.map(esc).join(', ')}. Their price data starts after November 2024, so their highs are understated.</p>`:''}
+    <p><strong>What this isn’t.</strong> Reference levels from past prices, not forecasts or advice. Old BTC-ratio highs may never come back, and fees and thin order books cut into the numbers.</p>`;
+  document.getElementById('connInfo').textContent = `Connected to ${auth.owner}/${auth.repo} (${branch}).`;
+
+  const bar = document.getElementById('savebar');
+  if(draft){
+    const P = plan();
+    const parts = [];
+    if(P.changed.length) parts.push(`${P.changed.length} coin${P.changed.length>1?'s get':' gets'} new rungs`);
+    if(P.removed.length) parts.push(`${P.removed.length} leave${P.removed.length>1?'':'s'} the plan`);
+    document.getElementById('saveInfo').textContent = 'Unsaved changes' + (parts.length? ': '+parts.join(', ') : '') + '.';
+    bar.hidden = false; document.body.classList.add('dirty');
+  } else { bar.hidden = true; document.body.classList.remove('dirty'); }
+  document.getElementById('checkBtn').disabled = busy;
+  renderStatus();
+}
+
+/* ---------------- actions ---------------- */
+function editDraft(fn){
+  if(!draft) draft = clone(F.portfolio.obj);
+  fn(draft);
+  if(JSON.stringify(draft)===JSON.stringify(F.portfolio.obj)) draft = null;
+}
+async function saveDraft(){
+  if(!draft || busy) return;
+  const P = computeTargets(draft);
+  const payload = {generated:new Date().toISOString().slice(0,10), btc_usd_at_generation:Math.round(btcUsd()), ladder:ladderLabel(draft.ladder), coins:P.coins};
+  const newPf = clone(draft);
+  busy = true; renderDynamic();
+  try{
+    await commit('targets', 'targets.json', 'Update rungs from the ladder page', ()=>payload);
+    await commit('portfolio', 'portfolio.json', 'Update portfolio from the ladder page', ()=>newPf);
+    draft = null;
+    toast('Saved. The next hourly check uses the new rungs.');
+  }catch(e){ toast('Could not save: '+e.message, true); }
+  busy = false; render();
+}
+async function setSold(key, sold){
+  if(busy || draft) return;
+  const [sym, nStr] = key.split(':'); const n = +nStr;
+  const rung = (F.targets.obj.coins[sym]||{rungs:[]}).rungs.find(r=>r.n===n); if(!rung) return;
+  busy = true; renderDynamic();
+  try{
+    await commit('targets', 'targets.json', `${sold?'Mark':'Unmark'} ${sym} rung ${n} as sold`, obj=>{
+      const r = obj.coins[sym].rungs.find(x=>x.n===n);
+      if(sold){ r.done = true; r.done_at = new Date().toISOString().slice(0,16); } else { delete r.done; delete r.done_at; }
+      return obj; });
+    await commit('portfolio', 'portfolio.json', `${sold?'Reduce':'Restore'} ${sym} holding for rung ${n}`, obj=>{
+      const c = obj.coins[sym]; c.qty = +Math.max(0, c.qty + (sold?-1:1)*rung.sell_qty).toPrecision(10); return obj; });
+    toast(sold ? `${sym} rung ${n} marked as sold. Holding lowered by ${fmtQty(rung.sell_qty)} ${sym}.` : `${sym} rung ${n} is open again.`);
+  }catch(e){ toast('Could not update: '+e.message, true); }
+  busy = false; renderDynamic();
+}
+async function checkNow(){
+  if(busy) return;
+  try{
+    await gh(`${repoPath()}/actions/workflows/${WORKFLOW}/dispatches`, {method:'POST', body:JSON.stringify({ref:branch, inputs:{command:'check'}})});
+    toast('Alert check started. A push arrives if a rung is reached.');
+    setTimeout(loadRun, 5000); setTimeout(loadRun, 40000); setTimeout(reloadState, 60000);
+  }catch(e){ toast('Could not start the check: '+e.message, true); }
+}
+async function reloadState(){ try{ const s = await getFile('state.json'); if(s.obj) F.state = s; renderDynamic(); }catch(e){} }
+async function reloadAll(){
+  try{ await connect(); draft = null; render(); loadPrices(); loadRun(); toast('Reloaded from GitHub.'); }
+  catch(e){ toast('Could not reload: '+e.message, true); }
+}
+
+/* ---------------- boot ---------------- */
+function showUnlock(msg){
+  document.getElementById('main').hidden = true;
+  document.getElementById('unlock').hidden = false;
+  if(auth){ document.getElementById('uOwner').value = auth.owner||''; document.getElementById('uRepo').value = auth.repo||'alt-alerts'; }
+  document.getElementById('unlockMsg').innerHTML = msg ? `<span class="err">${esc(msg)}</span>` : '';
+}
+function explain(e){
+  if(e.status===401) return 'GitHub rejected the token. It may have expired or been mistyped.';
+  if(e.status===404) return `Can’t see ${auth.owner}/${auth.repo} with this token. Check the names and that the token has access to that repository.`;
+  if(e.status===403) return 'GitHub refused the request: '+e.message;
+  return e.message || 'Could not connect.';
+}
+async function start(){
+  if(!auth || !auth.token){ showUnlock(); return; }
+  document.getElementById('unlock').hidden = true;
+  try{ await connect(); }
+  catch(e){ showUnlock(explain(e)); return; }
+  document.getElementById('main').hidden = false;
+  render(); loadPrices(); loadRun();
+}
+setInterval(()=>{ if(F.market && document.visibilityState==='visible') loadPrices(); }, 120000);
+setInterval(()=>{ if(F.market && document.visibilityState==='visible') loadRun(); }, 300000);
+document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='visible' && F.market && (!live.at || Date.now()-live.at.getTime()>60000)){ loadPrices(); loadRun(); } });
+
+let armT = {};
+document.addEventListener('click', e=>{
+  const t = e.target.closest('button');
+  if(!t) return;
+  if(t.id==='unlockBtn'){
+    const owner=document.getElementById('uOwner').value.trim(), repo=document.getElementById('uRepo').value.trim(), token=document.getElementById('uToken').value.trim();
+    if(!owner||!repo||!token){ document.getElementById('unlockMsg').innerHTML='<span class="err">Fill in all three fields.</span>'; return; }
+    auth = {owner, repo, token}; writeLS(LS_AUTH, auth); document.getElementById('uToken').value=''; start(); return;
+  }
+  if(t.dataset.toggle){ const s=t.dataset.toggle; openPanels[s]=!openPanels[s]; t.setAttribute('aria-expanded', openPanels[s]);
+    const d = t.closest('.coin').querySelector('.detail');
+    if(openPanels[s]){ planCache=null; d.innerHTML = detailHTML(coinModel(s)); d.hidden=false; } else { d.hidden=true; d.innerHTML=''; }
+    return; }
+  if(t.dataset.sold || t.dataset.unsold){
+    const key = t.dataset.sold || t.dataset.unsold, sold = !!t.dataset.sold;
+    if(!t.classList.contains('arm')){ t.classList.add('arm'); t.dataset.label=t.textContent; t.textContent='Sure?'; clearTimeout(armT[key]); armT[key]=setTimeout(()=>{ t.classList.remove('arm'); t.textContent=t.dataset.label; }, 4000); return; }
+    clearTimeout(armT[key]); setSold(key, sold); return;
+  }
+  if(t.dataset.scale){ editDraft(d=>d.ladder.scale=t.dataset.scale); render(); return; }
+  if(t.dataset.sort){ ui.sort=t.dataset.sort; writeLS(LS_UI, ui); render(); return; }
+  if(t.id==='resetLad'){ editDraft(d=>d.ladder=clone(DEFAULT_LADDER)); render(); return; }
+  if(t.id==='saveBtn'){ saveDraft(); return; }
+  if(t.id==='discardBtn'){ draft=null; render(); return; }
+  if(t.id==='checkBtn'){ checkNow(); return; }
+  if(t.id==='reloadBtn'){ reloadAll(); return; }
+  if(t.id==='lockBtn'){ writeLS(LS_AUTH, {owner:auth.owner, repo:auth.repo}); auth={owner:auth.owner, repo:auth.repo}; location.reload(); return; }
+  if(t.id==='copyBtn'){ const txt=document.getElementById('alertText').textContent, msg=document.getElementById('copyMsg');
+    (navigator.clipboard ? navigator.clipboard.writeText(txt) : Promise.reject()).then(()=>{ msg.textContent='Copied'; setTimeout(()=>msg.textContent='',2000); }, ()=>{ const r=document.createRange(); r.selectNodeContents(document.getElementById('alertText')); const s=getSelection(); s.removeAllRanges(); s.addRange(r); msg.textContent='Text selected, copy it manually'; });
+    return; }
+});
+let debounce;
+document.addEventListener('input', e=>{
+  const t = e.target;
+  if(t.dataset.lf!==undefined || t.dataset.ls!==undefined){
+    const i = +(t.dataset.lf ?? t.dataset.ls), field = t.dataset.lf!==undefined ? 'f' : 's';
+    const v = Math.max(0, Math.min(100, parseFloat(t.value)||0));
+    editDraft(d=>d.ladder.rungs[i][field]=v); clearTimeout(debounce); debounce=setTimeout(renderDynamic, 300); return;
+  }
+  if(t.id==='dust'){ ui.dust = Math.max(0, parseFloat(t.value)||0); writeLS(LS_UI, ui); clearTimeout(debounce); debounce=setTimeout(renderDynamic, 300); return; }
+});
+document.addEventListener('change', e=>{
+  const t = e.target;
+  if(t.dataset.inc){ const s=t.dataset.inc; editDraft(d=>{ d.coins[s] = Object.assign({qty:0}, d.coins[s], {include:t.checked}); }); renderDynamic(); return; }
+  if(t.dataset.qty){ const s=t.dataset.qty, v=parseFloat(t.value); if(!(v>=0)) return; editDraft(d=>{ d.coins[s] = Object.assign({include:false}, d.coins[s], {qty:v}); }); renderDynamic(); return; }
+});
+document.addEventListener('keydown', e=>{ if(e.key==='Enter' && e.target.closest('#unlock')) document.getElementById('unlockBtn').click(); });
+start();
+</script>
+</body>
+</html>
